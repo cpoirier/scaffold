@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby -KU
 # =============================================================================================
 # Scaffold
-# A simplified, CMS-like website development environment, built on Schemaform.
+# A simple, CMS-like development framework for content-based web sites.
 #
 # [Website]   http://schemaform.org/scaffold
 # [Copyright] Copyright 2011 Chris Poirier
@@ -27,8 +27,7 @@
 #
 # The system is intended for use in a plugin-based system, where errors may not be easily predicted 
 # nor fixed; as a result, ID collisions are recorded but not fatal, and you can query to find out
-# if there has been a problem. The class keeps Markaby's clean CSS handling. It also integrates with 
-# Scaffold's caching system—each Fragment can provide a caching context.
+# if there has been a problem. The class keeps Markaby's clean CSS handling.
 # 
 # Example:
 #
@@ -55,6 +54,7 @@
 #    puts b.to_s
 
 module Scaffold
+module Presentation
 class HTML5Builder
    
    def initialize( pretty_print = false, &block )
@@ -295,11 +295,12 @@ protected
    end
    
 end # HTML5Builder
+end # Presentation
 end # Scaffold
 
 
 if $0 == __FILE__ then
-   b = Scaffold::HTML5Builder.new(true)
+   b = Scaffold::Presentation::HTML5Builder.new(true)
    b.html do
       head do 
          meta :charset => "UTF-8"
