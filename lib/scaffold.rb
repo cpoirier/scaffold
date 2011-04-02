@@ -24,73 +24,24 @@ require File.expand_path(File.dirname(__FILE__)) + "/scaffold/sundry/baseline.rb
 module Scaffold
    QualityAssurance = Baseline::QualityAssurance
    @@locator        = Baseline::ComponentLocator.new(__FILE__, 2)
-   @@master_router  = nil
-   @@master_state   = nil
-   
    
    #
    # Creates a Rack app around the Scaffold, for running with rackup. Router should be an 
    # Scaffold::Routing::Router. It can be replaced at runtime using Scaffold:master_router=
    
-   def self.init( router, state = nil, &block )
-      self.master_router = router
-      self.master_state  = state || State.new()
-
-
-
+   def self.run( application, &block )
       require "rack"
       Rack::Builder.new do
          instance_eval( &block ) unless block.nil?
 
          app = proc do |env|
-            request  = Rack::Request.new(env)
-            response = Rack::Response.new()
-            
-            request_state = RequestState.new(Scaffold.master_state, request, response)
-            if agent_state = Scaffold.master_router.route(request_state) then
-               agent_state.addressee.process_request( agent_state )
-            else
-               response.status = 404
-            end
-            
-            response.finish
+            application.process_request(env)
          end
          
          run app
       end
    end
        
-
-   #
-   # Sets or resets the master router. Any running Rack will be affected.
-   
-   def self.master_router=( router )
-      @@master_router = router
-   end
-   
-   def self.master_router()
-      @@master_router
-   end
-
-   
-   #
-   # Sets or resets the master state. Any running Rack will be affected.
-   
-   def self.master_state=( state )
-      @@master_state = state
-   end
-
-   def self.master_state()
-      @@master_state
-   end
-
-
-
-
-
-
-
-   
    
    #
    # Finds components within the Scaffold library.

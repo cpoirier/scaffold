@@ -19,8 +19,6 @@
 # =============================================================================================
 
 require "scaffold"
-require Scaffold.locate("scaffold/sundry/wildcard.rb")
-
 
 
 #
@@ -44,10 +42,37 @@ class Application
    end
    
    
+   #
+   # Wraps the Application to a Rack app, ready to be run. If you pass a block, it will
+   # be called inside the Rack app, so you can add middleware and such.
+   
+   def rack_app( &block )
+      application = self
+      
+      Rack::Builder.new do
+         instance_eval( &block ) unless block.nil?
+
+         app = proc do |env|
+            application.process_request(env)
+         end
+
+         run app
+      end
+   end
+   
    
    #
-   # Attempts to resolve an Address into an Addressee. Pass the context for at least
-   # the request-level resolution, as it may be needed.
+   # Processes a request from Rack Request to Rack Response, using the Scaffold system.
+   
+   def process_request( rack_env )
+      request = RackRequest.new(self, rack_env)
+      
+   end
+   
+   
+   
+   #
+   # Attempts to resolve an Address into an Addressee.
    
    def route( request = nil )
       return @resolutions[address] if @resolutions.member?(address)
@@ -60,42 +85,47 @@ class Application
       #
       # TODO: Revisit this once real performance characteristics are determined.
       
-      rule = @url_handlers.select_first{|rule| rule.matches?(address)} or bug("what should happen here?")
-      rule.block.call(context) unless context.nil?
-      agent = rule.agent
-      
-      agent.resolve()
-      
-      
+      if rule = @url_handlers.select_first{|rule| rule.matches?(address)} then
+         rule.post_processor.call(rule, request)
+         rule.agent.route(request)
+      else
+         bug("what should happen here?")
+      end
    end
    
    
    #
    # Defines an Agent as the handler for URLs that match the criteria. The following
    # criteria are supported:
-   #    :host          => name or wildcard pattern (default: "*")
-   #    :port          => number (default: nil)
-   #    :protocol      => http, https, or http*
-   #    :full_path     => path or wildcard path (default: "/"), against the full path
-   #    :internal_path => path or wildcard path (default: "/"), against only the part of the 
-   #                      URL that will be handled by the application
+   #    :host       => name or wildcard pattern (default: "*")
+   #    :port       => number (default: nil)
+   #    :protocol   => http, https, or http*
+   #    :path       => path or wildcard path (default: "/")
+   #    :path_scope => :internal or :full, depending on whether :path should apply to
+   #                   the part of the path handled by the application, or the full
+   #                   path from the root of the URL (default: :internal)
+   #
+   # Note: rules are tried in declaration order. 
    #
    # If you need to take special actions on match, pass a block, which will be called
-   # with the Context at match time. Note: if the resolve() routine is not passed the
-   # Context, your block will NOT be called.
+   # at match time with the RoutingRule and Context. The RoutingRule can provide match
+   # data from which you can retrieve the values for any wildcards you used.
    #
-   # Note: rules are tried in declartion order. 
+   # Example:
+   #    define_route(an_agent, :host => "*.somehost.com") do |rule, request|
+   #       request[:subdomain] = rule.host_match[1]
+   #    end
    
    def define_route( agent, criteria = {}, &block )
-      host          = criteria.delete(:host         )
-      port          = criteria.delete(:port         )
-      full_path     = criteria.delete(:full_path    )
-      internal_path = criteria.delete(:internal_path)
-      protocol      = criteria.delete(:protocol     )
+      host       = criteria.delete(:host      )
+      port       = criteria.delete(:port      )
+      protocol   = criteria.delete(:protocol  )
+      path       = criteria.delete(:path      )
+      path_scope = criteria.delete(:path_scope)
       
       assert( criteria.empty?, "found unrecognized criteria in URL handler definition", criteria )
       
-      @routing_rules << Rule.new( agent, protocol, host, port, full_path, internal_path, &block )
+      @routing_rules << RoutingRule.new( agent, protocol, host, port, path, path_scope, &block )
    end
    
    
@@ -104,45 +134,6 @@ class Application
 private
 
 
-   #
-   # A single rule used to determine which master Agent will handle an incoming URL. Objects of this 
-   # class get used on every request, so we take some pains to shortcut unnecessary work.
-
-   class Rule
-      attr_reader :agent, :block
-      
-      def initialize( agent, protocol, host, port, full_path, path, &block )
-         @agent     = agent
-         @block     = block 
-                    
-         @host      = host
-         @port      = port
-         @protocol  = protocol
-         @full_path = full_path
-         @path      = path
-         
-         @matches_host      = host.nil?      || host == "*"
-         @matches_port      = port.nil?      || port == 0
-         @matches_protocol  = protocol.nil?  || protocol == "http*"
-         @matches_full_path = full_path.nil? || full_path == "/"
-         @matches_path      = path.nil?      || path == "/"
-         @matches_all       = @matches_host && @matches_port && @matches_protocol && @matches_full_path && @matches_path
-         
-         @host_pattern      = @matches_host      || !@host.includes?("*")      ? nil : Wildcard.compile(@host)
-         @full_path_pattern = @matches_full_path || !@full_path.includes?("*") ? nil : Wildcard.compile(@full_path)
-         @path_pattern      = @matches_path      || !@path.includes?("*")      ? nil : Wildcard.compile(@path)
-      end
-      
-      def matches?( address )
-         return true if @matches_all
-         return false unless @matches_port      || @port     == address.port
-         return false unless @matches_protocol  || @protocol == address.protocol
-         return false unless @matches_host      || (@host_pattern      ? @host_pattern      =~ address.host      : @host == address.host                     )
-         return false unless @matches_full_path || (@full_path_pattern ? @full_path_pattern =~ address.full_path : address.full_path.starts_with?(@full_path))
-         return false unless @matches_path      || (@path_pattern      ? @path_pattern      =~ address.path      : address.path.starts_with?(@path)          )
-         return true
-      end
-   end
    
 end # Application
 end # Scaffold
