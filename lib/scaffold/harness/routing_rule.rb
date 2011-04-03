@@ -27,39 +27,35 @@ module Scaffold
 class RoutingRule
    attr_reader :agent, :post_processor
    
-   def initialize( agent, protocol, host, port, path, path_scope, &block )
+   def initialize( agent, protocol, host, port, path, &block )
       @agent            = agent
       @post_processor   = block 
                   
       @protocol         = protocol
       @host             = host
       @port             = port
-      @path             = path
-      @path_scope       = path_scope == :full ? :full : :internal
+      @path             = clean_path(path)
       
-      @matches_protocol = protocol.nil?  || protocol == "http*"
-      @matches_host     = host.nil?      || host == "*"
-      @matches_port     = port.nil?      || port == 0
-      @matches_path     = path.nil?      || path == "/"
+      @matches_protocol = protocol.nil? || protocol == "http*"
+      @matches_host     = host.nil?     || host == "*"
+      @matches_port     = port.nil?     || port == 0
+      @matches_path     = path.nil?
       @matches_all      = @matches_host && @matches_port && @matches_protocol && @matches_path
       
       @host_wildcard    = @matches_host || !@host.includes?("*") ? nil : Baseline::Wildcard.compile(@host, true , true, true)
       @path_wildcard    = @matches_path || !@path.includes?("*") ? nil : Baseline::Wildcard.compile(@path, false, true, true)
    end
    
-   def matches?( address, capture_wildcards = false )
+   def matches?( request, capture_wildcards = false )
       return true if @matches_all
-      return false unless @matches_protocol || @protocol == address.protocol
-      return false unless @matches_port     || @port     == address.port
-      return false unless @matches_host     || (@host_wildcard ? !!@host_wildcard.match(address.host, capture_wildcards) : @host == address.host)
+      return false unless @matches_protocol || @protocol == request.protocol
+      return false unless @matches_port     || @port     == request.port
+      return false unless @matches_host     || (@host_wildcard ? !!@host_wildcard.match(request.host, capture_wildcards) : @host == request.host)
       
-      unless @matches_path
-         comparison_path = (@path_scope == :full ? address.full_path : address.path)
-         if @path_wildcard then
-            return false unless @path_wildcards.match(comparison_path, capture_wildcards)
-         else
-            return false unless comparison_path.starts_with?(@path)            
-         end
+      if @path_wildcard then
+         return false unless @path_wildcard.match(request.path, true)
+      else
+         return false unless request.path == @path || request.path.starts_with?(@path + "/")
       end
       
       return true
@@ -82,5 +78,15 @@ private
       return wildcard.match(address)
    end
    
+   def clean_path( path )
+      return nil if path.nil?
+      
+      while path.ends_with?("/")
+         path = path.slice(0..-2) 
+      end
+      
+      return nil if path.empty?
+      return path
+   end
 end
 end # Scaffold

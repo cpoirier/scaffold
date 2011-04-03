@@ -36,7 +36,7 @@ module Scaffold
          @internal_properties = internal_properties
       end
       
-      attr_reader :request, :response, :url, :unresolved, :addressee
+      attr_reader :request, :response, :url, :unresolved, :handler
       
       def get_property( name, default = nil, search_order = SOURCE_INTERNAL, require_https = false )
          search_order.to_a.member?(SOURCE_INTERNAL) ? get_internal_property(name, default) : default
@@ -93,14 +93,14 @@ module Scaffold
    class AgentState < RequestState
       def initialize( context_state, agent, url, unresolved = "" )
          super( context_state )
-         @addressee     = agent
+         @handler     = agent
          @url           = url
          @unresolved    = unresolved
          @context_state = context_state
       end
       
       def get_internal_property( name, default = nil )
-         @addressee.get_property(name, default) || super
+         @handler.get_property(name, default) || super
       end
    end
    

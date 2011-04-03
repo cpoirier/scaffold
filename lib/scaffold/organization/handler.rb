@@ -20,21 +20,32 @@
 
 
 #
-# Any URL-addressable handler within the system.
+# The fundamental URL handler in the system.
 
 module Scaffold
 module Organization
-class Addressee
+class Handler
 
-   #
-   # Given a request that falls within our purview, returns the Addressee it refers to.
+   def initialize()
+      
+   end
    
-   def route( request )
+   #
+   # Various routines that indicate the handler's capabilities.
+   
+   def handles_not_found?() ; false ; end
+   def handles_index_page() ; false ; end
+   
+   
+   #
+   # Returns a handler for the given name, or nil, if this handler doesn't recognize the 
+   # name.
+   
+   def find( name )
       return nil
    end
    
 
-
-end # Addressee
+end # Handler
 end # Organization
 end # Scaffold

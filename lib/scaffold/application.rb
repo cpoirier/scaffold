@@ -38,7 +38,6 @@ class Application
       @properties    = properties
       @configuration = configuration
       @routing_rules = []       
-      @resolutions   = {}
    end
    
    
@@ -72,40 +71,47 @@ class Application
    
    
    #
-   # Attempts to resolve an Address into an Addressee.
+   # Attempts to route a request to the appropriate Addressee for handling.
    
    def route( request = nil )
-      return @resolutions[address] if @resolutions.member?(address)
-      
-      #
-      # We could try for a partial solution, by working up through the address levels,
-      # then back down again, but in the worst case, we'd still have to do all the top-down
-      # work anyway, and in the best case, we might only save a few lookups. So, we'll just
-      # start from the top. 
-      #
-      # TODO: Revisit this once real performance characteristics are determined.
-      
-      if rule = @url_handlers.select_first{|rule| rule.matches?(address)} then
+      if rule = @url_handlers.select_first{|rule| rule.matches?(request)} then
+         path = rule.path_match
          rule.post_processor.call(rule, request)
-         rule.agent.route(request)
-      else
-         bug("what should happen here?")
+
+         #
+         # Starting at the anchor, find the handler best-able to handle the request.
+         
+         route = Route.build_anchor(request, path, rule.agent)
+         until route.complete?
+            if possible = route.next() then
+               route = possible
+            else
+               until route.complete?
+                  if route.handler.handles_not_found? then
+                     route.accept_not_found()
+                  else
+                     route = route.previous
+                  end
+               end
+            end
+         end
       end
+      
+      route
    end
    
    
    #
    # Defines an Agent as the handler for URLs that match the criteria. The following
    # criteria are supported:
+   #    :protocol   => http, https, or http* (default: http*)
    #    :host       => name or wildcard pattern (default: "*")
    #    :port       => number (default: nil)
-   #    :protocol   => http, https, or http*
-   #    :path       => path or wildcard path (default: "/")
-   #    :path_scope => :internal or :full, depending on whether :path should apply to
-   #                   the part of the path handled by the application, or the full
-   #                   path from the root of the URL (default: :internal)
+   #    :path       => path or wildcard path (default: nil)
    #
-   # Note: rules are tried in declaration order. 
+   # Note that rules are tried in declaration order. Also note that the path never includes
+   # the application name -- only that part of the full URL path that is inside this 
+   # application.
    #
    # If you need to take special actions on match, pass a block, which will be called
    # at match time with the RoutingRule and Context. The RoutingRule can provide match
@@ -121,11 +127,10 @@ class Application
       port       = criteria.delete(:port      )
       protocol   = criteria.delete(:protocol  )
       path       = criteria.delete(:path      )
-      path_scope = criteria.delete(:path_scope)
       
       assert( criteria.empty?, "found unrecognized criteria in URL handler definition", criteria )
       
-      @routing_rules << RoutingRule.new( agent, protocol, host, port, path, path_scope, &block )
+      @routing_rules << RoutingRule.new( agent, protocol, host, port, path, &block )
    end
    
    

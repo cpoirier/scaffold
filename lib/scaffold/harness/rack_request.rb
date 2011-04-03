@@ -30,13 +30,17 @@ require "rack/response"
 module Scaffold
 class RackRequest
    
-   attr_reader :rack_request, :rack_response
+   attr_reader :rack_request, :rack_response, :protocol, :host, :port, :application, :path
 
    def initialize( application, rack_env )
       @rack_request  = Rack::Request.new(rack_env)
       @rack_response = Rack::Response.new()
       
-      super(application, Address.new(@request.scheme, @request.host, @request.port, @request.script_name, @request.path_info))
+      @protocol    = @rack_request.scheme
+      @host        = @rack_request.host
+      @port        = @rack_request.port || (@protocol == "https" ? 443 : 80)
+      @application = @request.script_name
+      @path        = @request.path_info
    end
 
    def naming_prefix
