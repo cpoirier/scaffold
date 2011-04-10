@@ -20,26 +20,25 @@
 
 
 #
-# Base class for a request for content.
+# An Area within a Layout. These are places Widgets and content can be placed.
 
 module Scaffold
-module Harness
-class Request
-   
-   attr_reader :address, :application
-   
-   def initialize( address, application )
-      @address     = address
-      @application = application
+module Presentation
+class Area
+
+   def initialize( layout, name, description, multivalued )
+      @layout      = layout
+      @name        = name
+      @description = description
+      @multivalued = multivalued
    end
    
-   def naming_prefix
-      fail_unless_overridden(self, :naming_prefix)
-   end
+   attr_reader :layout, :name, :description
    
-end # Request
-end # Harness
+   def multivalued?()
+      @multivalued
+   end
+
+end # Area
+end # Presentation
 end # Scaffold
-
-
-

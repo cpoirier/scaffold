@@ -23,6 +23,7 @@
 # A request issued from inside the scaffold.
 
 module Scaffold
+module Harness
 class InternalRequest
    attr_reader :naming_prefix
    
@@ -33,4 +34,5 @@ class InternalRequest
    end
    
 end
+end # Harness
 end # Scaffold

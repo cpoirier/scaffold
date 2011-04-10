@@ -20,26 +20,18 @@
 
 
 #
-# Base class for a request for content.
+# The runtime version of a Widget, ready to be rendered against the running system.
 
 module Scaffold
-module Harness
-class Request
-   
-   attr_reader :address, :application
-   
-   def initialize( address, application )
-      @address     = address
-      @application = application
+module Presentation
+module Renderers
+class Widget < HTML5
+
+   def initialize( definition, language )
+      
    end
-   
-   def naming_prefix
-      fail_unless_overridden(self, :naming_prefix)
-   end
-   
-end # Request
-end # Harness
+
+end # Widget
+end # Renderers
+end # Presentation
 end # Scaffold
-
-
-

@@ -487,7 +487,7 @@ class Array
          return self[-1]
       end
    end
-   
+
 end
 
 

@@ -23,6 +23,7 @@
 # An address to be (or already) resolved to an Addressee. Never includes the query string.
 
 module Scaffold
+module Harness
 class Path < String
    
    def directory?()
@@ -67,4 +68,5 @@ class Path < String
    end
    
 end # Path
+end # Harness
 end # Scaffold

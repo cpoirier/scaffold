@@ -18,7 +18,6 @@
 #             limitations under the License.
 # =============================================================================================
 
-
 #
 # A Markaby-like builder for HTML5 that doesn't assume the underlying language is XML. It explictly
 # avoids validating the HTML, as the spec for HTML5 is still evolving and may change at any time.
@@ -55,7 +54,8 @@
 
 module Scaffold
 module Presentation
-class HTML5Builder
+module Renderers
+class HTML5
    
    def initialize( pretty_print = false, &block )
       @stream        = []
@@ -73,6 +73,10 @@ class HTML5Builder
       @stream << "<!DOCTYPE html>"
       @stream << "\n" if @pretty_print
       make!( :html, {:lang => language}.update(attrs), &block )
+   end
+   
+   def to_stream()
+      @stream
    end
    
    def to_s()
@@ -294,13 +298,14 @@ protected
       end
    end
    
-end # HTML5Builder
+end # HTML5
+end # Renderers
 end # Presentation
 end # Scaffold
 
 
 if $0 == __FILE__ then
-   b = Scaffold::Presentation::HTML5Builder.new(true)
+   b = Scaffold::Presentation::Renderers::HTML5.new(true)
    b.html do
       head do 
          meta :charset => "UTF-8"

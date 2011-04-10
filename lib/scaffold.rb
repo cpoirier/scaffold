@@ -19,29 +19,12 @@
 # =============================================================================================
 
 
-require File.expand_path(File.dirname(__FILE__)) + "/scaffold/sundry/baseline.rb"
+require File.expand_path(File.dirname(__FILE__)) + "/scaffold/baseline.rb"
 
 module Scaffold
    QualityAssurance = Baseline::QualityAssurance
    @@locator        = Baseline::ComponentLocator.new(__FILE__, 2)
    
-   #
-   # Creates a Rack app around the Scaffold, for running with rackup. Router should be an 
-   # Scaffold::Routing::Router. It can be replaced at runtime using Scaffold:master_router=
-   
-   def self.run( application, &block )
-      require "rack"
-      Rack::Builder.new do
-         instance_eval( &block ) unless block.nil?
-
-         app = proc do |env|
-            application.process_request(env)
-         end
-         
-         run app
-      end
-   end
-       
    
    #
    # Finds components within the Scaffold library.
@@ -54,7 +37,7 @@ module Scaffold
 end # Scaffold
 
 
-[".", "requests", "organization", "presentation"].each do |directory|
+[".", "*"].each do |directory|
    Dir[Scaffold.locate("scaffold/#{directory}/*.rb")].each do |path| 
       require path
    end

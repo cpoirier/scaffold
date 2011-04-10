@@ -28,26 +28,37 @@ require "rack/response"
 # A direct, Rack-based HTTP request. Everything starts with one of these.
 
 module Scaffold
+module Harness
 class RackRequest
    
-   attr_reader :rack_request, :rack_response, :protocol, :host, :port, :application, :path
+   attr_reader :rack_request, :protocol, :host, :port, :application, :path, :names
 
    def initialize( application, rack_env )
       @rack_request  = Rack::Request.new(rack_env)
-      @rack_response = Rack::Response.new()
+      @rack_response = nil
       
       @protocol    = @rack_request.scheme
       @host        = @rack_request.host
       @port        = @rack_request.port || (@protocol == "https" ? 443 : 80)
-      @application = @request.script_name
-      @path        = @request.path_info
+      @application = @rack_request.script_name
+      @path        = @rack_request.path_info
+      @names       = @path.split("/", -1).slice(1..-1)
+   end
+   
+   def rack_response()
+      @rack_response ||= Rack::Response.new()
    end
 
    def naming_prefix
       []
    end
+   
+   def respond( body = [], status = 200, headers = {} )
+      (@rack_response = Rack::Response.new(body, status, headers)).finish
+   end
 
 end # RackRequest
+end # Harness
 end # Scaffold
 
 
@@ -77,10 +88,6 @@ module Rack
    
       # def header?( name )
       #    header.member?(name)
-      # end
-      # 
-      # def content_type()
-      #    self["Content-Type"]
       # end
       # 
       # def content_type=( name )

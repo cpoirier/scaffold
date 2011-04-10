@@ -20,26 +20,44 @@
 
 
 #
-# Base class for a request for content.
+# Anchors the pre-fab Presentation system by grouping a set of Layouts together for easy access.
 
 module Scaffold
-module Harness
-class Request
+module Presentation
+class Theme
    
-   attr_reader :address, :application
+   #
+   # Defines a new Theme and registers it for access.
    
-   def initialize( address, application )
-      @address     = address
-      @application = application
+   def self.define( name, description, additional = {} )
+      new(description, additional).tap do |theme|
+         @@themes[name] = theme
+      end
    end
    
-   def naming_prefix
-      fail_unless_overridden(self, :naming_prefix)
+   attr_reader :identifier, :name, :description, :additional, :layouts
+   
+
+   #
+   # Defines a new Layout within the Theme and returns it for your use.
+   
+   def define_layout( name, description, additional = {} )
+      Layout.new(self, name, description, additional).tap do |layout|
+         @layouts[name] = layout
+      end
    end
    
-end # Request
-end # Harness
+
+private
+   def initialize( name, description, additional = {} )
+      @name        = name
+      @description = description
+      @additional  = additional
+      @layouts     = {}
+   end
+
+   @@themes = {}
+
+end # Theme
+end # Presentation
 end # Scaffold
-
-
-

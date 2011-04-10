@@ -20,26 +20,47 @@
 
 
 #
-# Base class for a request for content.
+# Describes an independent element that will be added to a Layout. Widgets can address the 
+# overall page header, to include JavaScript and CSS elements, and can offer secondary widgets
+# that can be placed elsewhere on the page.
 
 module Scaffold
-module Harness
-class Request
-   
-   attr_reader :address, :application
-   
-   def initialize( address, application )
-      @address     = address
-      @application = application
+module Presentation
+class Widget
+
+   def initialize( name, description )
+      @name        = name
+      @description = description
+      @scripts     = []
+      @stylesheets = []
    end
    
-   def naming_prefix
-      fail_unless_overridden(self, :naming_prefix)
+   attr_reader :before_render, :on_render, :after_render
+   
+   def require_script( url, async = false )
+      @scripts << [url, async]
    end
    
-end # Request
-end # Harness
+   def require_stylesheet( url, media = "all" )
+      @@stylesheets << [url, media]
+   end
+   
+   def before_render( proc = nil, &block )
+      @before_render = proc || block
+   end
+   
+   def on_render( proc = nil, &block )
+      @on_render = proc || block
+   end
+   
+   def after_render( proc = nil, &block )
+      @after_render = proc || block
+   end
+   
+   def instantiate( language )
+      Runtime::Widget.new(self, language)
+   end
+
+end # Widget
+end # Presentation
 end # Scaffold
-
-
-

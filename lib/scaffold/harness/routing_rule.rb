@@ -24,6 +24,7 @@
 # class get used on every request, so we take some pains to shortcut unnecessary work.
 
 module Scaffold
+module Harness
 class RoutingRule
    attr_reader :agent, :post_processor
    
@@ -88,5 +89,7 @@ private
       return nil if path.empty?
       return path
    end
-end
+   
+end # RoutingRule
+end # Harness
 end # Scaffold

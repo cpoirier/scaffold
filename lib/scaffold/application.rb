@@ -19,62 +19,60 @@
 # =============================================================================================
 
 require "scaffold"
+require Scaffold.locate("organization/handler.rb")
 
 
 #
 # The master router and keeper of objects for the system. You will probably need only one
-# of these in your system.
+# of these in your system. Pass this object to Rack as an application and it will run.
 
 module Scaffold
-class Application
+class Application < Organization::Handler
 
+   attr_reader :strings
+   
+   
    #
    # +properties+ are your queryable properties, used by your services and agents. 
    #
    # +configuration+ controls how various Application features (name caching, for instance)
    # are managed.
    
-   def initialize( properties = {}, configuration = {} )
+   def initialize( name, properties = {}, configuration = {}, &block )
+      super()
+      
+      @name          = name
       @properties    = properties
       @configuration = configuration
       @routing_rules = []       
+      @catchall      = block
    end
    
    
-   #
-   # Wraps the Application to a Rack app, ready to be run. If you pass a block, it will
-   # be called inside the Rack app, so you can add middleware and such.
-   
-   def rack_app( &block )
-      application = self
       
-      Rack::Builder.new do
-         instance_eval( &block ) unless block.nil?
-
-         app = proc do |env|
-            application.process_request(env)
-         end
-
-         run app
-      end
-   end
-   
-   
    #
    # Processes a request from Rack Request to Rack Response, using the Scaffold system.
    
    def process_request( rack_env )
-      request = RackRequest.new(self, rack_env)
-      
+      request = Harness::RackRequest.new(self, rack_env)
+      if route = route(request) then
+         fail "TODO: routing"
+      elsif @catchall then
+         @catchall.call( request )
+      end
    end
    
-   
+   alias call process_request
+      
    
    #
-   # Attempts to route a request to the appropriate Addressee for handling.
+   # Attempts to route a request to the appropriate Handler. Returns a properly
+   # marked, ready to go Route or nil.
    
-   def route( request = nil )
-      if rule = @url_handlers.select_first{|rule| rule.matches?(request)} then
+   def route( request )
+      route = nil
+      
+      if rule = @routing_rules.select_first{|rule| rule.matches?(request)} then
          path = rule.path_match
          rule.post_processor.call(rule, request)
 
@@ -82,11 +80,11 @@ class Application
          # Starting at the anchor, find the handler best-able to handle the request.
          
          route = Route.build_anchor(request, path, rule.agent)
-         until route.complete?
+         until route.nil? || route.complete?
             if possible = route.next() then
                route = possible
             else
-               until route.complete?
+               until route.nil? || route.complete?
                   if route.handler.handles_not_found? then
                      route.accept_not_found()
                   else

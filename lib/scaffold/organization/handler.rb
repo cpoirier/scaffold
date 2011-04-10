@@ -33,19 +33,19 @@ class Handler
    #
    # Various routines that indicate the handler's capabilities.
    
-   def handles_not_found?() ; false ; end
-   def handles_index_page() ; false ; end
+   def handles_not_found?()  ; false ; end
+   def handles_index_page?() ; false ; end
    
    
    #
    # Returns a handler for the given name, or nil, if this handler doesn't recognize the 
-   # name.
+   # name. As with all Handler operations, you are responsible for your own access control.
    
-   def find( name )
+   def find( name, context )
       return nil
    end
    
-
+   
 end # Handler
 end # Organization
 end # Scaffold

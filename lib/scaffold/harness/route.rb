@@ -23,33 +23,28 @@
 # Captures a step in the routing of a request to the Addressee responsible for its processing.
 
 module Scaffold
+module Harness
 class Route
    
    STATUS_ACCEPTED  = 200
    STATUS_REDIRECT  = 301
    STATUS_NOT_FOUND = 404
    STATUS_FORBIDDEN = 403
-   
+
+   attr_reader :tail, :path, :status
+
+
+   #
+   # Builds an initial Route from a path an agent.
    
    def self.build_anchor( request, rule_path, agent )
       Route.new(rule_path, agent, request.path.slice(rule_path.to_s.length..-1).split("/", -1).slice(1..-1), nil, request)
    end
    
-   def accept()
-      complete(STATUS_ACCEPTED)
-   end
    
-   def accept_not_found()
-      complete(STATUS_NOT_FOUND)
-   end
-   
-   def redirect_into()
-      complete(STATUS_REDIRECT, "#{@name}/")
-   end
-   
-   def redirect( location )
-      complete(STATUS_REDIRECT, location)
-   end
+   #
+   # Returns true if this Route is complete and can be used. If false, there
+   # is still routing work to be done.
    
    def complete?()
       unless @status
@@ -67,24 +62,37 @@ class Route
       return !!@status
    end
    
+   
+   #
+   # Determines the next step in the routing. Returns a Route or nil.
+   
    def next()
       unless complete?()
-         if child = @handler.find(@tail.first) then
+         if child = @handler.find(@tail.first, self) then
             return self.new(@tail.first, child, @tail.rest, self)
          end
       end
       
       nil
    end
-   
-   def tail()
-      @tail
-   end
-   
-   def path()
-      @path
-   end
 
+   
+   def accept()
+      complete(STATUS_ACCEPTED)
+   end
+   
+   def accept_not_found()
+      complete(STATUS_NOT_FOUND)
+   end
+   
+   def redirect_into()
+      complete(STATUS_REDIRECT, "#{@name}/")
+   end
+   
+   def redirect( location )
+      complete(STATUS_REDIRECT, location)
+   end
+   
 private
    def initialize( name, handler, tail, previous = nil, request = nil )
       @name     = name
@@ -102,4 +110,5 @@ private
    end
 
 end # Route
+end # Harness
 end # Scaffold
