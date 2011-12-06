@@ -56,7 +56,7 @@ class Application < Organization::Handler
    def process_request( rack_env )
       request = Harness::RackRequest.new(self, rack_env)
       if route = route(request) then
-         fail "TODO: routing"
+         fail_todo "routing"
       elsif @catchall then
          @catchall.call( request )
       end

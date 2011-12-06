@@ -59,7 +59,7 @@ module Scaffold
       end
       
       def initialize( context_state, request = nil, response = nil )
-         super( context_state.instance_eval{@internal_properties} )
+         super( context_state.instance_variable_get(:@internal_properties) )
          @context_state = context_state
          @request       = request  || context_state.request
          @response      = response || context_state.response

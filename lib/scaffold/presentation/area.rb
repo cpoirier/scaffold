@@ -26,14 +26,13 @@ module Scaffold
 module Presentation
 class Area
 
-   def initialize( layout, name, description, multivalued )
-      @layout      = layout
+   def initialize( name, description, multivalued )
       @name        = name
       @description = description
       @multivalued = multivalued
    end
    
-   attr_reader :layout, :name, :description
+   attr_reader :name, :description
    
    def multivalued?()
       @multivalued

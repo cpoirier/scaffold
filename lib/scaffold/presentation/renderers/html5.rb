@@ -92,7 +92,7 @@ class HTML5
    end
    
    def append!( fragment )
-      @stream.append fragment.instance_eval{@stream}
+      @stream.append fragment.instance_variable_get(:@stream)
    end
    
    def capture!(&block)
@@ -168,15 +168,21 @@ protected
          case arg
          when Hash
             arg.each do |name, value|
-               name  = name.to_s
-               make_attribute!(name, value)
+               case name = name.to_s
+               when "text!"
+                  body << escape!(value.to_s)
+               when "raw!"
+                  body << value.to_s
+               else
+                  make_attribute!(name, value)
                
-               if name == "id" then
-                  value = value.to_s
-                  if @ids.member?(value) then
-                     @duplicate_ids[value] = true
-                  else
-                     @ids[value] = true
+                  if name == "id" then
+                     value = value.to_s
+                     if @ids.member?(value) then
+                        @duplicate_ids[value] = true
+                     else
+                        @ids[value] = true
+                     end
                   end
                end
             end

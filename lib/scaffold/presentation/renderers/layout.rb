@@ -119,8 +119,6 @@ class Layout < HTML5
          @rendered = true
       end
 
-      puts @stream.length
-      
       @stream
    end
    

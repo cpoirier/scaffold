@@ -4,7 +4,7 @@
 # Ruby extensions and support classes for a better world.
 #
 # [Website]   http://github.com/cpoirier/baseline
-# [Copyright] Copyright 2004-2010 Chris Poirier (this file)
+# [Copyright] Copyright 2004-2011 Chris Poirier (this file)
 # [License]   Licensed under the Apache License, Version 2.0 (the "License");
 #             you may not use this file except in compliance with the License.
 #             You may obtain a copy of the License at
@@ -36,6 +36,20 @@ if !Object.method_defined?(:instance_class) then
       end
    end
 end
+
+
+#
+# Returns the Method object for the caller of this routine.
+
+if !Object.method_defined?(:caller_method) then
+   class Object
+      def caller_method(level = 2)
+         name = caller(level).first.sub(/^.*in ./, "").sub(/.$/, "").intern
+         instance_class.instance_method(name) 
+      end
+   end
+end
+
 
 #
 # Defines plurally-named synonyms for some singularly-named routines.
@@ -79,19 +93,25 @@ end
 # Ensures all objects can be converted to arrays. Individual objects are converted to
 # a list of one; nil is converted to an empty list.
 
-if !NilClass.method_defined?(:to_a) then
+if !NilClass.method_defined?(:to_array) then
    class NilClass
-      def to_a()
+      def to_array()
          return []
       end
    end
 end
 
-if !Object.method_defined?(:to_a) then
+if !Object.method_defined?(:to_array) then
    class Object
-      def to_a()
+      def to_array()
          return [self]
       end
+   end
+end
+
+if !Array.method_defined?(:to_array) then
+   class Array
+      alias to_array to_a
    end
 end
 
@@ -115,6 +135,15 @@ if !Object.method_defined?(:each) then
    end
 end
    
+
+class ArrayHash < Hash
+   def self.new()
+      super do |hash, key|
+         hash[key] = []
+      end
+   end
+end
+
 
 
 
@@ -182,26 +211,32 @@ class Object
       #    <object:SomeClass>.specialize("process") => :process_some_class
 
       def specialize_method_name( name )
-         return "#{name}#{(is_a?(Class) ? self : self.class).name.split("::")[-1].gsub(/[A-Z]/){|s| "_#{s.downcase}"}}".intern
+         return "#{name}#{(is_a?(Class) ? self : self.class).unqualified_name.gsub(/[A-Z]/){|s| "_#{s.downcase}"}}".intern
       end
 
 
       #
       # Sends a specialized method to this object.  Will follow the class hierarchy for the
       # determinant object, searching for a specialization this object supports.  Failing that, 
-      # the default_specialization will be used, if supplied.
+      # your fallback block will be called with the +determinant+ and +parameters+, or the 
+      # routine will +fail()+.
 
-      def send_specialized( name, default_specialization, determinant, *parameters )
-         current_class = determinant.is_a?(Class) ? determinant : determinant.class
+      def send_specialized( name, determinant, *parameters, &fallback )
+         determinant_class = determinant.is_a?(Class) ? determinant : determinant.class
+         current_class = determinant_class
          while current_class
             specialized = current_class.specialize_method_name(name)
             return self.send( specialized, determinant, *parameters ) if self.responds_to?(specialized)
             current_class = current_class.superclass
          end
-
-         specialized = name + (default_specialization ? "_" + default_specialization : "")
-         return self.send( specialized, determinant, *parameters )
+         
+         if fallback then
+            return fallback.call(determinant, *parameters)
+         else
+            raise Baseline::SpecializationFailure.new("unable to find specialization of #{name} for #{determinant_class.name}", :determinant => determinant)
+         end
       end
+      
    end
 end
    
@@ -209,10 +244,52 @@ end
 
 
 # =============================================================================================
+#                                       Module Extensions
+# =============================================================================================
+
+class Module
+   
+   #===========================================================================================
+   if !method_defined?(:unqualified_name) then
+      
+      #
+      # Returns the unqualified class name.
+      
+      def unqualified_name()
+         @unqualified_name ||= self.name.split("::").last
+      end
+   end
+   
+   
+end
+
+
+# =============================================================================================
 #                                        Class Extensions
 # =============================================================================================
 
 class Class
+   
+   #===========================================================================================
+   if !method_defined?(:namespace_module) then
+      
+      #
+      # Returns the namespace in which the class is defined.
+      
+      def namespace_module()
+         unless defined?(@namespace_module)
+            if marker = self.name.rindex("::") then
+               namespace_name = self.name[0..(marker-1)]
+               @namespace_module = eval(namespace_name)
+            else
+               @namespace_module = nil
+            end
+         end
+         
+         @namespace_module
+      end
+   end
+   
    
    #===========================================================================================
    if !method_defined?(:define_subclass) then
@@ -292,6 +369,28 @@ end
 
 class Exception
 
+   #
+   # Defines a simple Exception class that takes a standard parameter list and provides
+   # retrievers to access them.
+      
+   def self.define( *parameters )
+      Class.new(self) do
+         @@defined_subclass_field_lists[self] = parameters
+      
+         define_method(:initialize) do |*values|
+            super()
+            @@defined_subclass_field_lists[self.class].each{|name| instance_variable_set("@#{name}".intern, values.shift)}
+         end
+
+         parameters.each do |name|
+            attr_reader "#{name}".intern
+         end
+      end         
+   end
+
+   @@defined_subclass_field_lists = {}
+   
+
    #===========================================================================================
    if !method_defined?(:failsafe_message) then
       
@@ -324,7 +423,7 @@ class Exception
       # Produces a backtrace with file paths relative to the specified directory.
 
       def relative_backtrace( relative_to, skip_qa_routines = true )
-         relative_to = File.expand_path(relative_to.sub(/\/$/, "")) + "/"
+         relative_to = File.expand_path(relative_to.sub(/\/$/, "")) + "/" if relative_to
 
          relative_backtrace = []
          backtrace.each do |line|
@@ -354,7 +453,7 @@ class Exception
             message   = failsafe_message
             backtrace = relative_backtrace(relative_to, skip_qa_routines)
          
-            stream.puts( "=" * message.length )
+            stream.puts( "=" * (message.length > 60 ? message.length : 60) )
             stream.puts heading
             stream.puts message
             print_data( stream ) if respond_to?("print_data")
@@ -366,6 +465,7 @@ class Exception
       end
    end
 end
+
 
 
 
@@ -410,25 +510,6 @@ class Array
    
    
    #===========================================================================================
-   if !method_defined?(:accumulate) then
-      
-      #
-      # Appends your value to a list at the specified index, creating an array at that index
-      # if not present.
-   
-      def accumulate( key, value )
-         if self[key].nil? then
-            self[key] = []
-         elsif !self[key].is_an?(Array) then
-            self[key] = [self[key]]
-         end
-
-         self[key] << value
-      end
-   end
-   
-   
-   #===========================================================================================
    if !method_defined?(:to_hash) then
       
       #
@@ -459,8 +540,8 @@ class Array
       #
       # Returns all but the first element in this list.
    
-      def rest()
-         return self[1..-1]
+      def rest( n = 1 )
+         return self[n..-1]
       end
    end
    
@@ -487,7 +568,7 @@ class Array
          return self[-1]
       end
    end
-
+   
 end
 
 
@@ -512,6 +593,36 @@ module Enumerable
       end
    end
 
+   #===========================================================================================
+   if !method_defined?(:accumulate) then
+      
+      #
+      # Appends your value to a list at the specified index, creating an array at that index
+      # if not present.
+   
+      def accumulate( key, value )
+         if self[key].nil? then
+            self[key] = []
+         elsif !self[key].is_an?(Array) then
+            self[key] = [self[key]]
+         end
+
+         self[key] << value
+      end
+   end
+   
+   #===========================================================================================
+   if !method_defined?(:not_empty?) then
+      
+      #
+      # Prettier version of !enumerable.empty?
+   
+      def not_empty?()
+         !empty?
+      end
+   end
+   
+   
 end
 
 
@@ -533,6 +644,18 @@ class String
    
    if !method_defined?(:includes?) then
       alias :includes? :include?
+   end
+   
+   if !method_defined?(:identifier_case) then
+      def identifier_case()
+         self.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').gsub(/([a-z\d])([A-Z])/,'\1_\2').tr("-", "_").downcase
+      end
+   end
+   
+   if !method_defined?(:camel_case) then
+      def camel_case()
+         identifier_case().gsub(/($|_)./,$2.upcase)
+      end
    end
    
 end
@@ -575,6 +698,83 @@ class Set
    
 end
 
+def Set( *values )
+   Set.new(values)
+end
+
+
+
+# =============================================================================================
+#                                        Thread Extensions
+# =============================================================================================
+
+class Thread
+   def self.[]( name )
+      Thread.current[name]
+   end
+   
+   def self.[]=( name, value )
+      Thread.current[name] = value
+   end
+   
+   def self.key?( name )
+      Thread.current.key?(name)
+   end
+end
+
+
+
+# =============================================================================================
+#                                        Time Extensions
+# =============================================================================================
+
+class Time
+   
+   #
+   # Returns a Time far in the future, or offset from now.
+   
+   def self.future( offsets = {} )
+      if offsets.empty? then
+         Time.utc(9999, 12, 31, 23, 59, 59, 999999)
+      else
+         days    = offsets.fetch(:days   , offsets.fetch(:day   , 0))
+         hours   = offsets.fetch(:hours  , offsets.fetch(:hour  , 0))
+         minutes = offsets.fetch(:minutes, offsets.fetch(:minute, 0))
+         seconds = offsets.fetch(:seconds, offsets.fetch(:second, 0))
+         
+         Time.now() + ((((((days * 24) + hours) * 60) + minutes) * 60) + seconds)
+      end
+   end
+
+
+   #
+   # Returns a Time far in the past, or offset from now.
+   
+   def self.past( offsets = {} )
+      if offsets.empty? then
+         Time.utc(200,1,1,0,0,0)
+      else
+         days    = offsets.fetch(:days   , offsets.fetch(:day   , 0))
+         hours   = offsets.fetch(:hours  , offsets.fetch(:hour  , 0))
+         minutes = offsets.fetch(:minutes, offsets.fetch(:minute, 0))
+         seconds = offsets.fetch(:seconds, offsets.fetch(:second, 0))
+         
+         Time.now() - ((((((days * 24) + hours) * 60) + minutes) * 60) + seconds)
+      end
+   end
+   
+   
+   #
+   # Measures the duration of the block you pass.
+   
+   def self.measure()
+      start_time = Time.now()
+      yield
+      Time.now() - start_time
+   end
+
+end
+
 
 
 
@@ -599,6 +799,13 @@ module Baseline
       # =======================================================================================
       #                                      Runtime Checks
       # =======================================================================================
+
+      #
+      # Returns true if checks are enabled.
+      
+      def checks_enabled?()
+         @@quality_assurance__checks_enabled
+      end
 
    
       #
@@ -676,19 +883,29 @@ module Baseline
       #
       # Dumps a message to $stderr, once per message.
    
-      def warn_once( message )
+      def warn_once( message, label = "WARNING", separator = ": " )
          @@quality_assurance__warnings = {} if !defined?(@@quality_assurance__warnings)
          unless @@quality_assurance__warnings.member?(message)
-            warn( message )
+            warn( message, label, separator )
          end
+      end
+
+      
+      #
+      # Similar to warn_once(), but prepends "TODO: " when displaying the mssage.
+      
+      def warn_todo( message )
+         warn_once(message, "TODO")
       end
    
    
       #
       # Dumps a message to $stderr.
    
-      def warn( message )
-         $stderr.puts( (message =~ /^[A-Z]+: / ? "" : "WARNING: ") + message )
+      def warn( message, label = "WARNING", separator = ": " )
+         label = separator = "" if label == "WARNING" && separator == ": " && message =~ /^[A-Z]+: /
+
+         $stderr.puts "#{label}#{separator}#{message}"
          @@quality_assurance__warnings = {} if !defined?(@@quality_assurance__warnings)
          @@quality_assurance__warnings[message] = true
       end
@@ -700,6 +917,14 @@ module Baseline
    
       def self.warnings_disabled?()
          !@@quality_assurance__warnings_enabled
+      end
+      
+      
+      #
+      # Dumps a debug message to $stderr.
+      
+      def debug( message )
+         $stderr.puts( (message =~ /^[A-Z]+: / ? "" : "DEBUG: ") + message )
       end
    
    
@@ -713,7 +938,7 @@ module Baseline
       #
       # Raises an AssertionFailure if the condition is false.
 
-      def assert( condition, message, data = nil, &block )
+      def assert( condition, message = "this should not happen", data = nil, &block )
          fail( message, data, &block ) unless condition
          true
       end
@@ -729,14 +954,36 @@ module Baseline
    
    
       #
+      # Raises an AssertionFailure indicating a method is incomplete.
+      
+      def fail_todo( message = nil )
+         fail("TODO" + (message ? ": #{message}" : ""))
+      end
+      
+      
+      #
       # Raises an AssertionFailure indicating a method should have been overrided.
 
-      def fail_unless_overridden( object, method )
-         method = object.instance_class.instance_method(method) unless method.is_a?(Method)
-         fail( "You must override: #{method.owner.name}.#{method.name} in #{object.class.name}" )
+      def fail_unless_overridden()
+         context = self.is_a?(Class) ? self : self.class
+         method  = self.caller_method()
+         
+         fail("You must override: #{method.owner.inspect}.#{method.name} in #{context.name}")
       end
-
-
+      
+      
+      #
+      # Raises an AssertionFailure indicating a method is obsolete and the call to it should
+      # be removed.
+      
+      def fail_obsolete()
+         context = self.is_a?(Class) ? self : self.class
+         method  = self.caller_method()
+         
+         fail("#{method.owner.inspect}.#{method.name} is OBSOLETE and can no longer be used.")
+      end
+      
+      
       #
       # Asserts that condition is true, but still outputs the message.
    
@@ -748,12 +995,17 @@ module Baseline
    
       #
       # Catches any exceptions raised in your block and returns error_return instead.  Returns
-      # your block's return value otherwise.
+      # your block's return value otherwise. You can pass a list of exceptions that should 
+      # bypass the mechanism -- it's generally a good idea to let syntax and similar errors through.
 
-      def ignore_errors( error_return = nil )
+      def ignore_errors( error_return = nil, unfiltered_errors = [NoMethodError] )
          begin
             return yield()
-         rescue
+         rescue Exception => e
+            unfiltered_errors.each do |clas|
+               raise e if e.is_a?(clas)
+            end
+            
             return error_return
          end
       end
@@ -806,6 +1058,7 @@ module Baseline
 
    class AssertionFailure < Bug; end
    class TypeCheckFailure < Bug; end
+   class SpecializationFailure < Bug ; end
 
 end # Baseline
 
@@ -838,8 +1091,8 @@ module Baseline
    class ComponentLocator
 
       def initialize( master_path, levels_back = 1 )
-         @system_name = File.basename(__FILE__, ".rb")
-         @system_base = File.expand_path(File.dirname(__FILE__))
+         @system_name = File.basename(master_path, ".rb")
+         @system_base = File.expand_path(File.dirname(master_path))
          @levels_back = levels_back
       end
 

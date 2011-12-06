@@ -26,16 +26,14 @@ module Scaffold
 module Presentation
 class Layout
 
-   def initialize( theme, name, description, builder_class = HTML5Builder )
-      @theme         = theme
+   def initialize( name, description )
       @name          = name
       @description   = description
-      @builder_class = builder_class
       @areas         = {}         
       @strings       = {}
    end
    
-   attr_reader :name, :builder_class, :areas, :strings
+   attr_reader :name, :areas, :strings
    
    def define_area( name, description, allow_multiples = false )
       Area.new(self, name, description, allow_multiples).tap do |area|

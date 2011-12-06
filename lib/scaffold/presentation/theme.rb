@@ -42,7 +42,7 @@ class Theme
    # Defines a new Layout within the Theme and returns it for your use.
    
    def define_layout( name, description, additional = {} )
-      Layout.new(self, name, description, additional).tap do |layout|
+      Layout.new(name, description, additional).tap do |layout|
          @layouts[name] = layout
       end
    end
