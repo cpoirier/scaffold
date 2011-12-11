@@ -30,7 +30,7 @@
 # 
 # Example:
 #
-#    b = Scaffold::HTML5Builder.new(true)
+#    b = Scaffold::Presentation::Renderers::HTML5Builder.new(true)
 #    b.html do
 #       head do 
 #          meta :charset => "UTF-8"
@@ -246,8 +246,8 @@ protected
    #  tag.class.class.id! { ... }
    #
    # Essentially, if there are no parameters to a missing_method call, we update the data and
-   # expect further modifiers.  If there are parameters, we fold the call into the parent
-   # builder and expect to be done.  Bare names are classes.  ! names are IDs.
+   # expect further modifiers. If there are parameters, we fold the call into the parent
+   # builder and expect to be done. Bare names are classes. ! names are IDs.
    
    class CSSProxy
       def initialize( builder, tag, position, indent, serial )

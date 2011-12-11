@@ -20,7 +20,7 @@
 
 
 #
-# Captures a step in the routing of a request to the Addressee responsible for its processing.
+# Captures a step in the routing of a request to the Agent responsible for its processing.
 
 module Scaffold
 module Harness
@@ -31,7 +31,7 @@ class Route
    STATUS_NOT_FOUND = 404
    STATUS_FORBIDDEN = 403
 
-   attr_reader :tail, :path, :status
+   attr_reader :tail, :path, :status, :handler
 
 
    #
@@ -68,7 +68,7 @@ class Route
    
    def next()
       unless complete?()
-         if child = @handler.find(@tail.first, self) then
+         if child = @handler.resolve(@tail.first, self) then
             return self.new(@tail.first, child, @tail.rest, self)
          end
       end

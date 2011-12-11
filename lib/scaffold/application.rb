@@ -19,7 +19,7 @@
 # =============================================================================================
 
 require "scaffold"
-require Scaffold.locate("organization/handler.rb")
+require Scaffold.locate("handler.rb")
 
 
 #
@@ -27,22 +27,25 @@ require Scaffold.locate("organization/handler.rb")
 # of these in your system. Pass this object to Rack as an application and it will run.
 
 module Scaffold
-class Application < Organization::Handler
+class Application < Handler
 
-   attr_reader :strings
+   attr_reader :strings, :properties, :defaults, :configuration
    
    
    #
-   # +properties+ are your queryable properties, used by your services and agents. 
+   # +properties+ are name/value pairs; they override any user-supplied data.
+   #
+   # +defaults+ are name/value pairs that fill in behind user-supplied data.
    #
    # +configuration+ controls how various Application features (name caching, for instance)
    # are managed.
    
-   def initialize( name, properties = {}, configuration = {}, &block )
-      super()
+   def initialize( name, properties = {}, defaults = {}, configuration = {}, &block )
+      super(self)
       
       @name          = name
       @properties    = properties
+      @defaults      = defaults
       @configuration = configuration
       @routing_rules = []       
       @catchall      = block
@@ -52,10 +55,14 @@ class Application < Organization::Handler
       
    #
    # Processes a request from Rack Request to Rack Response, using the Scaffold system.
+   # You probably won't need to call this: Rack will do it for your.
    
    def process_request( rack_env )
-      request = Harness::RackRequest.new(self, rack_env)
-      if route = route(request) then
+      request = Rack::Request.new(rack_env)
+      url     = Harness::URL.new(request.scheme, request.host, request.port, Harness::Address.new(request.script_name, request.path), request.GET)
+      state   = Harness::State.new(self, url, request.POST, request.cookies, request.scheme == "https")
+      
+      if route = route(state) then
          fail_todo "routing"
       elsif @catchall then
          @catchall.call( request )
@@ -66,18 +73,18 @@ class Application < Organization::Handler
       
    
    #
-   # Attempts to route a request to the appropriate Handler. Returns a properly
-   # marked, ready to go Route or nil.
+   # Attempts to route a request to the appropriate Handler. Returns a properly marked, ready 
+   # to go Route or nil.
    
-   def route( request )
+   def route( state )
       route = nil
-      
-      if rule = @routing_rules.select_first{|rule| rule.matches?(request)} then
-         path = rule.path_match
-         rule.post_processor.call(rule, request)
+
+      if rule = @routing_rules.select_first{|rule| state.url =~ rule.pattern} then
+         path = rule.path_match   ; warn_once("should we do anything to rule.path_match with respect to an included application path match", "BUG")
+         rule.post_processor.call(rule, state)
 
          #
-         # Starting at the anchor, find the handler best-able to handle the request.
+         # Now, starting at the anchor, find the handler best-able to handle the request.
          
          route = Route.build_anchor(request, path, rule.agent)
          until route.nil? || route.complete?
@@ -100,38 +107,25 @@ class Application < Organization::Handler
    
    
    #
-   # Defines an Agent as the handler for URLs that match the criteria. The following
-   # criteria are supported:
-   #    :protocol   => http, https, or http* (default: http*)
-   #    :host       => name or wildcard pattern (default: "*")
-   #    :port       => number (default: nil)
-   #    :path       => path or wildcard path (default: nil)
+   # Defines an Agent as the handler for URLs that match the criteria. See Harness::URLPattern for
+   # details on the supported pattern syntax and behaviour.
    #
-   # Note that rules are tried in declaration order. Also note that the path never includes
-   # the application name -- only that part of the full URL path that is inside this 
-   # application.
+   # During routing, rules are tried in declaration order.
    #
-   # If you need to take special actions on match, pass a block, which will be called
-   # at match time with the RoutingRule and Context. The RoutingRule can provide match
-   # data from which you can retrieve the values for any wildcards you used.
+   # If you need to take special actions on match, pass a block, which will be called at match time 
+   # with the RoutingRule and State. RoutingRule.pattern can provide match data from which you can 
+   # retrieve the values for any wildcards you used.
    #
    # Example:
-   #    define_route(an_agent, :host => "*.somehost.com") do |rule, request|
+   #    define_route("http*://*.somehost.com", an_agent) do |rule, request|
    #       request[:subdomain] = rule.host_match[1]
    #    end
    
-   def define_route( agent, criteria = {}, &block )
-      host       = criteria.delete(:host      )
-      port       = criteria.delete(:port      )
-      protocol   = criteria.delete(:protocol  )
-      path       = criteria.delete(:path      )
-      
-      assert( criteria.empty?, "found unrecognized criteria in URL handler definition", criteria )
-      
-      @routing_rules << RoutingRule.new( agent, protocol, host, port, path, &block )
+   def define_route( pattern, agent, &block )
+      @routing_rules << RoutingRule.new(pattern, agent, block)
    end
    
-   
+   RoutingRule = Struct.new( :pattern, :agent, :post_processor )
 
 
 private

@@ -20,17 +20,19 @@
 
 
 #
-# Captures the definitions needed to creat a Layout.
+# Captures the definitions needed to create a Layout.
 
 module Scaffold
 module Presentation
 class Layout
 
-   def initialize( name, description )
+   def initialize( name, description, &definer )
       @name          = name
       @description   = description
       @areas         = {}         
       @strings       = {}
+      
+      instance_eval(&definer) if definer
    end
    
    attr_reader :name, :areas, :strings

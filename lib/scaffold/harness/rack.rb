@@ -18,28 +18,48 @@
 #             limitations under the License.
 # =============================================================================================
 
+require "rack"
+require "rack/request"
+require "rack/response"
 
-#
-# Base class for a request for content.
 
-module Scaffold
-module Harness
-class Request
+
+# =============================================================================================
+#                                       Rack Extensions
+# =============================================================================================
+
+
+module Rack
    
-   attr_reader :address, :application
-   
-   def initialize( address, application )
-      @address     = address
-      @application = application
+   class Request
+      def base_url()
+        base_url = scheme + "://"
+        base_url << host
+
+        if scheme == "https" && port != 443 ||
+           scheme == "http"  && port != 80  then
+          base_url << ":#{port}"
+        end
+
+        base_url
+      end
+      
+      def port_string()
+         ((scheme == "https" && port == 443) || (scheme == "http" && port == 80)) ? "" : ":#{port}"
+      end
    end
-   
-   def naming_prefix
-      fail_unless_overridden(self, :naming_prefix)
-   end
-   
-end # Request
-end # Harness
-end # Scaffold
 
+   class Response
+   
+      # def header?( name )
+      #    header.member?(name)
+      # end
+      # 
+      # def content_type=( name )
+      #    self["Content-Type"] = name
+      # end
+   
+   end
+end
 
 

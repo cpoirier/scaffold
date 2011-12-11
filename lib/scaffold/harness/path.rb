@@ -20,18 +20,26 @@
 
 
 #
-# An address to be (or already) resolved to an Addressee. Never includes the query string.
+# Contains a directory/file path as a string and provides useful services thereon.
 
 module Scaffold
 module Harness
 class Path < String
    
+   def Path.build( path )
+      path.is_a?(Path) ? path : new(path)
+   end
+   
+   def absolute?()
+      starts_with("/")
+   end
+   
    def directory?()
-      ends_with?("/")
+      ends_with("/") 
    end
    
    def to_directory()
-      ends_with?("/") ? self : Path.new(self + "/")
+      directory? ? self : new(to_s + "/")
    end
    
    def in_directory?( directory )
@@ -40,31 +48,38 @@ class Path < String
    
    def offset( relative_path )
       if relative_path.starts_with?("/") then
-         Path.new(relative_path.to_s)
+         new(relative_path.to_s)
       else
-         directory = self.to_directory()
+         directory = directory? ? self : parent_directory()
          
          while relative_path.starts_with?("../")
-            unless directory.empty? || directory == "/"
-               directory = Path.new(File.dirname(directory)).to_directory()
-            end
-         
+            directory = directory.parent_directory()
             relative_path = relative_path.slice(3..-1)
          end
-      
-         Path.new(directory + relative_path)
+         
+         if relative_path == ".." then
+            directory
+         elsif relative_path.starts_with?("/")
+            new(directory.to_s + path.slice(1..-1)
+         else
+            new(directory.to_s + path.to_s)
+         end
       end
    end
    
    def parent_directory()
-      return nil if empty? || self.to_s == "/"
-      Path.new(File.dirname(self)).to_directory()
+      return self if self == "/"
+      new(File.dirname(self)).to_directory()
    end
 
    def path_after( base_path )
       base_path = base_path.slice(0..-2) if base_path.ends_with?("/")
-      return nil unless @path.length > base_path.length && @path.starts_with?(base_path)
-      Path.new(@path.slice(base_path.length..-1)) 
+      return nil unless length > base_path.length && starts_with?(base_path)
+      Path.new(slice(base_path.length..-1)) 
+   end
+   
+   def components()
+      @components ||= split("/", -1).slice((absolute? ? 1 : 0)..-1)
    end
    
 end # Path

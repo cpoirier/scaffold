@@ -18,21 +18,29 @@
 #             limitations under the License.
 # =============================================================================================
 
+require Scaffold.locate("path.rb")
+
 
 #
-# A request issued from inside the scaffold.
+# A Path segmented into parts Scaffold needs when routing a request: application path, 
+# root handler path, and target path.
 
 module Scaffold
 module Harness
-class InternalRequest
-   attr_reader :naming_prefix
-   
-   def initialize( address, context_request )
-      super( address, context_request.application )
-      bug("how is the naming prefix derived?")
-      @naming_prefix = context_request.naming_prefix + []
+class Address < Path
+
+   def initialize( application_path, anchor_path = "", target_path = "" )
+      @application_path = Path.build(application_path)
+      @anchor_path      = Path.build(anchor_path)
+      @target_path      = Path.build(target_path)
+      @internal_path    = Path.build(@anchor_path + @target_path)
+      
+      super(@application_path + @internal_path)
    end
    
-end
+   attr_reader :application_path, :anchor_path, :target_path
+   attr_reader :internal_path
+   
+end # Address
 end # Harness
 end # Scaffold
