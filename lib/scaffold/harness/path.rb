@@ -82,6 +82,14 @@ class Path < String
       @components ||= split("/", -1).slice((absolute? ? 1 : 0)..-1)
    end
    
+   def +( path )
+      Path.new(to_s + path)
+   end
+   
+   def to_s()
+      String.new(self)
+   end
+   
 end # Path
 end # Harness
 end # Scaffold

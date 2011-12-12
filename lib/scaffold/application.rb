@@ -23,8 +23,8 @@ require Scaffold.locate("handler.rb")
 
 
 #
-# The master router and keeper of objects for the system. You will probably need only one
-# of these in your system. Pass this object to Rack as an application and it will run.
+# The master router and keeper of objects for the system. You will probably need only one of
+# these in your system. Pass this object to Rack as an application and it will run.
 
 module Scaffold
 class Application < Handler
@@ -33,22 +33,24 @@ class Application < Handler
    
    
    #
-   # +properties+ are name/value pairs; they override any user-supplied data.
+   # Creates a new application. Your block will be passed a Harness::State with all the context
+   # information, and must return the completed state. How you process the request is up to you:
+   # you can directly generate the content (for simple sites), using the Handler routing system
+   # to pick an appropriate handler and have it render the content, or implement a system of your
+   # own imagining. As a convenience, your block can return a Route instead of the State and 
+   # it will be completed and rendered for you.
    #
-   # +defaults+ are name/value pairs that fill in behind user-supplied data.
-   #
-   # +configuration+ controls how various Application features (name caching, for instance)
-   # are managed.
+   # Other inputs:
+   #    +properties+: name/value pairs that override any user-supplied data
+   #    +defaults+: name/value pairs that fill in behind user-supplied data.
    
    def initialize( name, properties = {}, defaults = {}, configuration = {}, &block )
       super(self)
       
-      @name          = name
-      @properties    = properties
-      @defaults      = defaults
-      @configuration = configuration
-      @routing_rules = []       
-      @catchall      = block
+      @name       = name
+      @properties = properties
+      @defaults   = defaults
+      @processor  = block
    end
    
    
@@ -58,75 +60,52 @@ class Application < Handler
    # You probably won't need to call this: Rack will do it for your.
    
    def process_request( rack_env )
-      request = Rack::Request.new(rack_env)
-      url     = Harness::URL.new(request.scheme, request.host, request.port, Harness::Address.new(request.script_name, request.path), request.GET)
-      state   = Harness::State.new(self, url, request.POST, request.cookies, request.scheme == "https")
+      request  = Rack::Request.new(rack_env)
+      url      = Harness::URL.new(request.scheme, request.host, request.port, request.script_name, request.path, request.GET)
+      state    = Harness::State.new(self, url, request.POST, request.cookies, request.scheme == "https")
       
-      if route = route(state) then
-         fail_todo "routing"
-      elsif @catchall then
-         @catchall.call( request )
+      result = @processor.call(state)
+      if result.is_a?(Harness::Route) then
+         result = result.complete.render(state)
+      end
+      
+      if result.complete? then
+         if result.response.is_a?(Proc) then
+            Rack::Response(nil, result.status, result.headers).finish(result.response)
+         else
+            Rack::Response(result.response, result.status, result.headers)
+         end
+      else
+         fail_todo("how do we handle an incomplete state as response?")
       end
    end
    
    alias call process_request
       
    
-   #
-   # Attempts to route a request to the appropriate Handler. Returns a properly marked, ready 
-   # to go Route or nil.
-   
-   def route( state )
-      route = nil
-
-      if rule = @routing_rules.select_first{|rule| state.url =~ rule.pattern} then
-         path = rule.path_match   ; warn_once("should we do anything to rule.path_match with respect to an included application path match", "BUG")
-         rule.post_processor.call(rule, state)
-
-         #
-         # Now, starting at the anchor, find the handler best-able to handle the request.
-         
-         route = Route.build_anchor(request, path, rule.agent)
-         until route.nil? || route.complete?
-            if possible = route.next() then
-               route = possible
-            else
-               until route.nil? || route.complete?
-                  if route.handler.handles_not_found? then
-                     route.accept_not_found()
-                  else
-                     route = route.previous
-                  end
-               end
-            end
-         end
-      end
-      
-      route
-   end
-   
-   
-   #
-   # Defines an Agent as the handler for URLs that match the criteria. See Harness::URLPattern for
-   # details on the supported pattern syntax and behaviour.
-   #
-   # During routing, rules are tried in declaration order.
-   #
-   # If you need to take special actions on match, pass a block, which will be called at match time 
-   # with the RoutingRule and State. RoutingRule.pattern can provide match data from which you can 
-   # retrieve the values for any wildcards you used.
-   #
-   # Example:
-   #    define_route("http*://*.somehost.com", an_agent) do |rule, request|
-   #       request[:subdomain] = rule.host_match[1]
+   # #
+   # # Attempts to route a request to the appropriate Handler. Returns a properly marked, ready 
+   # # to go Route or nil. 
+   # 
+   # def route( anchor, state )
+   #    route = anchor
+   #    until route.nil? || route.complete?
+   #       if possible = route.next() then
+   #          route = possible
+   #       else
+   #          until route.nil? || route.complete?
+   #             if route.handler.handles_not_found? then
+   #                route.accept_not_found()
+   #             else
+   #                route = route.previous
+   #             end
+   #          end
+   #       end
    #    end
+   #    
+   #    route
+   # end
    
-   def define_route( pattern, agent, &block )
-      @routing_rules << RoutingRule.new(pattern, agent, block)
-   end
-   
-   RoutingRule = Struct.new( :pattern, :agent, :post_processor )
-
 
 private
 

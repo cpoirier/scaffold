@@ -85,11 +85,7 @@ class URLPattern
          
          if @path then
             @check_internal_path_only = true
-            if @path.starts_with?("/") then
-               @path_wildcard = Baseline::Wildcard.compile(@path, match_end = false, match_beginning = true )
-            else
-               @path_wildcard = Baseline::Wildcard.compile(@path, match_end = true , match_beginning = false)
-            end
+            @path_wildcard = Baseline::Wildcard.compile(@path.starts_with?("/") ? @path : "/**/#{@path}", match_end = false, match_beginning = true)
          end
       end
    end
@@ -106,7 +102,7 @@ class URLPattern
       path = appropriate_path_segment(url)
       
       if @path_wildcard then
-         return false unless @path_wildcard.match(path, capture_wildcards)
+         return false unless @path_wildcard.match(path, true)
       else
          return false unless path == @path || path.starts_with?(@path + "/")
       end
@@ -118,18 +114,20 @@ class URLPattern
    # Returns any host wildcards matched during the last matches? call.
    
    def host_match( url = nil )
-      match_info(@host_wildcard, url.host)
+      match_info(@host_wildcard, @host, url.host)
    end
    
    def path_match( url = nil )
-      match_info(@path_wildcard, url && appropriate_path_segment(url))
+      if @check_internal_path_only && url.address.exists? then
+         url.address.application_path + match_info(@path_wildcard, @path, url && appropriate_path_segment(url))
+      match_info(@path_wildcard, @path, url && appropriate_path_segment(url))
    end
 
    
 private
 
-   def match_info( wildcard, string = nil )
-      return nil unless wildcard
+   def match_info( wildcard, default, string = nil )
+      return default unless wildcard
       if string.nil? then
          wildcard.last_match 
       else

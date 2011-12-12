@@ -36,22 +36,18 @@ class URL
    # You can pass an Address for +path+, and magic will happen. If you pass nil for +port+
    # an appropriate default will be chosen for you.
    
-   def initialize( scheme, host, port, path, parameters = {} )
-      @scheme      = scheme.downcase
-      @host        = host
-      @port        = port || WELL_KNOWN_PORTS.fetch(@scheme, nil)
-      @port_string = WELL_KNOWN_PORTS.fetch(@scheme, nil) == @port ? "" : ":#{@port}"
-      @parameters  = parameters
-      
-      self.path = path
+   def initialize( scheme, host, port, application_path, requested_path, parameters = {} )
+      @scheme           = scheme.downcase
+      @host             = host
+      @port             = port || WELL_KNOWN_PORTS.fetch(@scheme, nil)
+      @port_string      = WELL_KNOWN_PORTS.fetch(@scheme, nil) == @port ? "" : ":#{@port}"
+      @application_path = Path.build(application_path)
+      @requested_path   = Path.build(requested_path)
+      @full_path        = @application_path + @requested_path
+      @parameters       = parameters
    end
    
-   attr_reader :scheme, :host, :port, :port_string, :path, :address, :parameters
-   
-   def path=( path )
-      @path    = path
-      @address = path.is_an?(Address) ? path : nil
-   end
+   attr_reader :scheme, :host, :port, :port_string, :application_path, :requested_path, :full_path, :parameters
    
    def =~( pattern )
       case pattern
@@ -72,7 +68,7 @@ class URL
    
    def to_s( clear_cache = false )
       @string = nil if clear_cache
-      @string ||= "#{@protocol}://#{@host}#{@port_string}#{self.class.url_encode_path(path)}#{self.class.build_query_string(@parameters)}"
+      @string ||= "#{@protocol}://#{@host}#{@port_string}#{self.class.url_encode_path(@full_path)}#{self.class.build_query_string(@parameters)}"
    end
 
    
@@ -90,8 +86,8 @@ class URL
          end
       end
 
-      if @address.exists? && relative_path.starts_with?("/") then
-         self.class.new(@protocol, @host, @port, Path.build(@address.application_path + relative_path), parameters)
+      if relative_path.starts_with?("/") then
+         self.class.new(@protocol, @host, @port, @application_path + relative_path, parameters)
       else
          self.class.new(@protocol, @host, @port, @path.offset(relative_path), parameters)
       end

@@ -31,9 +31,10 @@ module Harness
 class State
 
    attr_reader :application, :get_parameters, :post_parameters, :cookies, :status
-   attr_accessor :content_type
+   attr_accessor :content_type, :status, :headers, :response
    
-   def secure? ; return !!@secure ; end
+   def secure?   ; return !!@secure   ; end
+   def complete? ; return !!@response ; end
    
 
    #
@@ -45,22 +46,26 @@ class State
    # appropriately for you.
    
    def initialize( application, url, post_parameters = {}, cookies = {}, secure = false )
-      @application      = application
-      @url              = url
-
-      @secure           = secure
-      @properties       = application.properties.dup
-      @get_parameters   = url.get_parameters
-      @post_parameters  = post_parameters 
-      @cookies          = cookies
-      @cookie_sets      = {}
-      @content_type     = "text/html";
-      @status           = 200;
-      @headers          = []
+      @properties = application.properties.dup
+      
+      @properties[:application] = @application     = application
+      @properties[:url        ] = @url             = url
+      @properties[:secure     ] = @secure          = secure
+      @properties[:get        ] = @get_parameters  = url.parameters
+      @properties[:post       ] = @post_parameters = post_parameters
+      @properties[:cookies    ] = @cookies         = cookies
+      
+      @content_type = "text/html";
+      @status       = 200;
+      @response     = nil
+      @cookie_sets  = {}
+      @headers      = []
       
       load_parameters()
       instance_eval(&definer) if definer
    end
+   
+   
    
    
    #
@@ -96,6 +101,24 @@ class State
    end
 
 
+   #
+   # Sets a response or response producer into the state. In the producer case, your block will
+   # be passed something to which you can write() strings. The output will be sent directly to 
+   # the client. Without a producer, the response will use memory until the response is sent.
+   #
+   # Note: you can pass the type in the first parameter if you are supplying a producer.
+   
+   def set_response( response = nil, type = "text/html", &producer )
+      if producer && response then
+         @content_type = response
+         @response     = producer
+      else
+         @content_type = type
+         @response     = response
+      end
+   end
+
+   
    #
    # Sets a cookie into the state and client.
 
