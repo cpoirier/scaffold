@@ -19,7 +19,7 @@
 # =============================================================================================
 
 require "rack/utils"
-require Schemaform.locate("url_pattern.rb")
+require Scaffold.locate("url_pattern.rb")
 
 
 
@@ -32,9 +32,13 @@ class URL
    
    WELL_KNOWN_PORTS = {"http" => 80, "https" => 443}
    
+   def self.build( rack_request )
+      new(rack_request.scheme, rack_request.host, rack_request.port, rack_request.script_name, rack_request.path, rack_request.GET)
+   end
+   
    #
-   # You can pass an Address for +path+, and magic will happen. If you pass nil for +port+
-   # an appropriate default will be chosen for you.
+   # If you pass nil for +port+ an appropriate default will be chosen for you. Generally, both
+   # +application_path+ and +requested_path+ should either be empty or start with a slash. 
    
    def initialize( scheme, host, port, application_path, requested_path, parameters = {} )
       @scheme           = scheme.downcase

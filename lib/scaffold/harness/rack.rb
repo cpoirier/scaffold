@@ -47,18 +47,20 @@ module Rack
       def port_string()
          ((scheme == "https" && port == 443) || (scheme == "http" && port == 80)) ? "" : ":#{port}"
       end
+      
    end
 
    class Response
-   
-      # def header?( name )
-      #    header.member?(name)
-      # end
-      # 
-      # def content_type=( name )
-      #    self["Content-Type"] = name
-      # end
-   
+      alias << write
+
+      def concat( array )
+         array.each do |element|
+            self << element
+         end
+      end
+      
+      alias append concat
+
    end
 end
 

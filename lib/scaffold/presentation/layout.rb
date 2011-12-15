@@ -74,12 +74,19 @@ class Layout
    #
    # Returns a single-use copy of the Layout, ready to be filled with Widgets and data.
    
-   def instantiate( language )
-      Renderers::Layout.new(self, language)
+   def instantiate( language, stream = [] )
+      Renderers::Layout.new(self, language, stream)
    end
    
-   def render( language )
-      Renderers::Layout.new(self, language).render!()
+   #
+   # Creates a single-use copy of the Layout and calls your block to fill it with Widgets and 
+   # data, then renders it and returns the stream.
+   
+   def render( language, stream = [], &setup )
+      Renderers::Layout.new(self, language, stream).tap do |renderer|
+         setup.call(renderer) if setup
+         renderer.render!
+      end
    end
    
    

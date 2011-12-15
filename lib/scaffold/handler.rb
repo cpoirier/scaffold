@@ -82,7 +82,7 @@ private
       @action = block
    end
 
-   attr_writer :handles_not_found, 
+   attr_writer :handles_not_found
    attr_writer :handles_index_page
    
    

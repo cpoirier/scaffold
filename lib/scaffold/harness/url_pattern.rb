@@ -117,11 +117,11 @@ class URLPattern
       match_info(@host_wildcard, @host, url.host)
    end
    
-   def path_match( url = nil )
-      if @check_internal_path_only && url.address.exists? then
-         url.address.application_path + match_info(@path_wildcard, @path, url && appropriate_path_segment(url))
-      match_info(@path_wildcard, @path, url && appropriate_path_segment(url))
-   end
+   # def path_match( url = nil )
+   #    if @check_internal_path_only && url.address.exists? then
+   #       url.address.application_path + match_info(@path_wildcard, @path, url && appropriate_path_segment(url))
+   #    match_info(@path_wildcard, @path, url && appropriate_path_segment(url))
+   # end
 
    
 private

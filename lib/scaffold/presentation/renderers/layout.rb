@@ -32,8 +32,8 @@ module Renderers
 class Layout < HTML5
    include QualityAssurance
 
-   def initialize( definition, language, pretty_print = false )
-      super( pretty_print )
+   def initialize( definition, language, stream = [], pretty_print = false )
+      super(stream, pretty_print)
       
       @definition  = definition
       @language    = language

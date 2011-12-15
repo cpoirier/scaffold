@@ -18,7 +18,8 @@
 #             limitations under the License.
 # =============================================================================================
 
-require Scaffold.locate("rack.rb")
+require Scaffold.locate("url.rb")
+require Scaffold.locate("language_preference.rb")
 
 
 
@@ -30,31 +31,31 @@ module Scaffold
 module Harness
 class State
 
-   attr_reader :application, :get_parameters, :post_parameters, :cookies, :status
-   attr_accessor :content_type, :status, :headers, :response
+   attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status
+   attr_accessor :content_type, :status, :headers, :response, :language_preference, :environment
    
    def secure?   ; return !!@secure   ; end
    def complete? ; return !!@response ; end
    
-
-   #
-   # +base_url+ should not end in a slash, and is the URL that gets you to the root of the 
-   # application. All absolute paths passed to make_url() will use this as the base.
-   #
-   # +offset_path+ should always start with a slash, and be the rest of the requested URL after 
-   # +base_url+. As a convenience, you can pass the whole URL and State will slice it
-   # appropriately for you.
+   def self.build( application, rack_request )
+      new(application, URL.build(rack_request), :post => rack_request.POST, :cookies => rack_request.cookies, :language_preference => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), :environment => rack_request.env)
+   end
    
-   def initialize( application, url, post_parameters = {}, cookies = {}, secure = false )
-      @properties = application.properties.dup
+   def initialize( application, url, properties = {} )
+      properties[:application] = application
+      properties[:url        ] = url
+      properties[:get        ] = url.parameters
       
-      @properties[:application] = @application     = application
-      @properties[:url        ] = @url             = url
-      @properties[:secure     ] = @secure          = secure
-      @properties[:get        ] = @get_parameters  = url.parameters
-      @properties[:post       ] = @post_parameters = post_parameters
-      @properties[:cookies    ] = @cookies         = cookies
-      
+      @properties          = application.properties.update(properties)
+      @application         = application
+      @url                 = url
+      @get_parameters      = url.parameters
+      @post_parameters     = @properties.fetch(:post               , {}                   )
+      @cookies             = @properties.fetch(:cookies            , {}                   )
+      @environment         = @properties.fetch(:environment        , {}                   )
+      @secure              = @properties.fetch(:secure             , url.scheme == "https")
+      @language_preference = @properties.fetch(:language_preference, nil                  )
+
       @content_type = "text/html";
       @status       = 200;
       @response     = nil
@@ -62,7 +63,6 @@ class State
       @headers      = []
       
       load_parameters()
-      instance_eval(&definer) if definer
    end
    
    
@@ -103,7 +103,7 @@ class State
 
    #
    # Sets a response or response producer into the state. In the producer case, your block will
-   # be passed something to which you can write() strings. The output will be sent directly to 
+   # be passed something to which you can append strings (<<). The output will be sent directly to 
    # the client. Without a producer, the response will use memory until the response is sent.
    #
    # Note: you can pass the type in the first parameter if you are supplying a producer.
@@ -118,6 +118,11 @@ class State
       end
    end
 
+   def on_response( type = "text/html", &producer )
+      @content_type = type
+      @response     = producer
+   end
+   
    
    #
    # Sets a cookie into the state and client.

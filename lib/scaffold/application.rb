@@ -20,6 +20,7 @@
 
 require "scaffold"
 require Scaffold.locate("handler.rb")
+require Scaffold.locate("harness/rack.rb")
 
 
 #
@@ -30,50 +31,63 @@ module Scaffold
 class Application < Handler
 
    attr_reader :strings, :properties, :defaults, :configuration
-   
+   attr_accessor :supported_languages
    
    #
-   # Creates a new application. Your block will be passed a Harness::State with all the context
-   # information, and must return the completed state. How you process the request is up to you:
-   # you can directly generate the content (for simple sites), using the Handler routing system
-   # to pick an appropriate handler and have it render the content, or implement a system of your
-   # own imagining. As a convenience, your block can return a Route instead of the State and 
-   # it will be completed and rendered for you.
+   # Creates a new application. If you pass a block, it will be instance_eval'd to set up the
+   # application.
    #
-   # Other inputs:
+   # Configuration keys:
+   #    +supported_languages+: a list of languages your application supports
    #    +properties+: name/value pairs that override any user-supplied data
    #    +defaults+: name/value pairs that fill in behind user-supplied data.
    
-   def initialize( name, properties = {}, defaults = {}, configuration = {}, &block )
-      super(self)
+   def initialize( name, configuration = {}, &definer )
+      @name                = name
+      @properties          = configuration.fetch(:properties, {})
+      @defaults            = configuration.fetch(:defaults  , {})
+      @supported_languages = configuration.fetch(:supported_languages, ["en"])
+      @processor           = nil
       
-      @name       = name
-      @properties = properties
-      @defaults   = defaults
-      @processor  = block
+      super(self, &definer)
    end
    
    
-      
+   #
+   # Defines the handler for each request to the Application. Your block will be passed a 
+   # Harness::State with all the context information, and which of your supported languages
+   # best fits the user's preferences. You must return the completed state. How 
+   # you process the request is up to you: you can directly generate the content (for simple 
+   # sites), using the Handler routing system to pick an appropriate handler and have it render 
+   # the content; or implement a system of your own imagining. As a convenience, your block can 
+   # return a Route instead of the State and it will be completed and rendered for you.
+   
+   def on_request(&block)
+      @processor = block
+   end
+
+
    #
    # Processes a request from Rack Request to Rack Response, using the Scaffold system.
    # You probably won't need to call this: Rack will do it for your.
    
    def process_request( rack_env )
       request  = Rack::Request.new(rack_env)
-      url      = Harness::URL.new(request.scheme, request.host, request.port, request.script_name, request.path, request.GET)
-      state    = Harness::State.new(self, url, request.POST, request.cookies, request.scheme == "https")
+      state    = Harness::State.build(self, request)
+      language = state.language_preference ? state.language_preference.best_of(@supported_languages) : @supported_languages.first
       
-      result = @processor.call(state)
+      result = @processor.call(state, language)
       if result.is_a?(Harness::Route) then
          result = result.complete.render(state)
+      elsif !result.is_a?(Harness::State) then
+         result = state
       end
       
       if result.complete? then
          if result.response.is_a?(Proc) then
-            Rack::Response(nil, result.status, result.headers).finish(result.response)
+            Rack::Response.new(nil, result.status, result.headers).finish(&result.response)
          else
-            Rack::Response(result.response, result.status, result.headers)
+            Rack::Response.new(result.response, result.status, result.headers)
          end
       else
          fail_todo("how do we handle an incomplete state as response?")

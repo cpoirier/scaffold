@@ -31,11 +31,11 @@ class Path < String
    end
    
    def absolute?()
-      starts_with("/")
+      starts_with?("/")
    end
    
    def directory?()
-      ends_with("/") 
+      ends_with?("/") 
    end
    
    def to_directory()
@@ -60,7 +60,7 @@ class Path < String
          if relative_path == ".." then
             directory
          elsif relative_path.starts_with?("/")
-            new(directory.to_s + path.slice(1..-1)
+            new(directory.to_s + path.slice(1..-1))
          else
             new(directory.to_s + path.to_s)
          end

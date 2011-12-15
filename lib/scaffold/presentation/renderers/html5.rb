@@ -57,8 +57,9 @@ module Presentation
 module Renderers
 class HTML5
    
-   def initialize( pretty_print = false, &block )
+   def initialize( stream = [], pretty_print = false, &block )
       @stream        = []
+      @real_stream   = stream
       @pretty_print  = pretty_print
       @indent        = 0
       @serial        = 0
@@ -67,32 +68,38 @@ class HTML5
       
       capture!(&block) unless block.nil?
    end
-   
+
    def html( language = "en", attrs = {}, &block )
-      reset!()
       @stream << "<!DOCTYPE html>"
       @stream << "\n" if @pretty_print
       make!( :html, {:lang => language}.update(attrs), &block )
+      flush!
    end
    
    def to_stream()
-      @stream
+      flush!
+      @real_stream
    end
    
    def to_s()
-      @stream.join()
+      flush!
+      @real_stream.is_an?(Array) ? @real_stream.join() : nil
    end
+
+   #
+   # Allows you to reuse the renderer with the same or another stream.
    
-   def reset!()
-      @stream.clear()
+   def reset!( new_stream = nil )
+      if new_stream then
+         @real_stream = new_stream
+      else
+         @real_stream.clear()
+      end 
+      
       @ids.clear()
       @duplicate_ids.clear()
       @serial = 0
       @indent = 0
-   end
-   
-   def append!( fragment )
-      @stream.append fragment.instance_variable_get(:@stream)
    end
    
    def capture!(&block)
@@ -104,7 +111,7 @@ class HTML5
    end
    
    def text!( text )
-      @stream << escape!(text)
+      @stream << escape!(text.to_s)
    end
    
    def comment!( text = nil, &block )
@@ -157,6 +164,7 @@ class HTML5
 
 protected
    def make!( symbol, *args, &block )
+      flush!
       make_indent! if @indent > 0
      
       serial = @serial = @serial + 1
@@ -239,6 +247,12 @@ protected
       raw.gsub(/[&<>\'\"]/){|s| CHARACTER_ESCAPES[s]}
    end
 
+   def flush!()
+      unless @stream.empty?
+         @real_stream.concat @stream
+         @stream.clear()
+      end
+   end
 
 
    #
