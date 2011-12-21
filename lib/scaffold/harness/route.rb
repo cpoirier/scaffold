@@ -20,95 +20,77 @@
 
 
 #
-# Captures a step in the routing of a request to the Agent responsible for its processing.
+# Captures a step in the routing of a request to the Handler responsible for its processing.
 
 module Scaffold
 module Harness
 class Route
-   
-   STATUS_ACCEPTED  = 200
-   STATUS_REDIRECT  = 301
-   STATUS_NOT_FOUND = 404
-   STATUS_FORBIDDEN = 403
+      
+   attr_reader :parent, :name, :handler, :path, :unresolved, :status, :redirect
 
-   attr_reader :tail, :path, :status, :handler
-
-
-   #
-   # Builds an initial Route from a path an agent.
+   def initialize( handler, parent, name, handler, unresolved, terminal = false )
+      @parent     = parent
+      @name       = name
+      @path       = @parent ? @parent.path + name : Path.new(name)
+      @handler    = handler
+      @unresolved = Path.build(unresolved)
+      
+      @complete   = false
+      @redirect   = nil
    
-   def self.build_anchor( request, rule_path, agent )
-      Route.new(rule_path, agent, request.path.slice(rule_path.to_s.length..-1).split("/", -1).slice(1..-1), nil, request)
-   end
-   
-   
-   #
-   # Returns true if this Route is complete and can be used. If false, there
-   # is still routing work to be done.
-   
-   def complete?()
-      unless @status
-         if @tail.empty? then
-            if @handler.handles_index_page? then
-               redirect_into()
-            else
-               accept()
-            end
-         elsif @tail.length == 1 && @tail.first == "" then
-            accept() if @handler.handles_index_page?
+      if terminal || @handler.routing_sink? then
+         @complete = true
+      elsif @unresolved.empty? then
+         @complete = true
+         if @unresolved.directory? ^ @handler.container? then
+            @location = @handler.container? ? @path.to_directory() : @path.to_file()
          end
       end
-      
-      return !!@status
+   end
+   
+   def complete?()
+      @complete
+   end
+   
+   def application()
+      @handler.application
+   end
+
+   #
+   # Retrieves the primary or an adjunct handler for this route.
+   
+   def handler( purpose = nil )
+      if purpose.nil? then
+         @handler
+      else
+         @handler.adjunct_for(purpose) || (@parent ? @parent.handler(purpose) : @handler.application.adjunct_for(purpose))
+      end
    end
    
    
    #
    # Determines the next step in the routing. Returns a Route or nil.
    
-   def next()
-      unless complete?()
-         if child = @handler.resolve(@tail.first, self) then
-            return self.new(@tail.first, child, @tail.rest, self)
+   def next( state )
+      return nil if complete?
+      
+      name = @unresolved.first
+      rest = @unresolved.rest
+   
+      if @handler.container? then
+         if handler = @handler.resolve(name, self, state) then
+            return self.new(self, name, handler, rest)
          end
       end
       
-      nil
+      if handler = handler(:not_found) then
+         return self.new(self, name, handler, rest, true)
+      else
+         fail "something in your application must define a handler for paths not found"
+      end
    end
 
    
-   def accept()
-      complete(STATUS_ACCEPTED)
-   end
-   
-   def accept_not_found()
-      complete(STATUS_NOT_FOUND)
-   end
-   
-   def redirect_into()
-      complete(STATUS_REDIRECT, "#{@name}/")
-   end
-   
-   def redirect( location )
-      complete(STATUS_REDIRECT, location)
-   end
-   
-private
-   def initialize( name, handler, tail, previous = nil, request = nil )
-      @name     = name
-      @handler  = handler
-      @tail     = tail
-      @previous = previous
-      @request  = request
-      @path     = previous ? name : (@previous.path + "/" + name)
-      @status   = 0      
-   end
-   
-   def complete( status, location = nil )
-      @status   = status
-      @location = location
-   end
-
 end # Route
 end # Harness
 end # Scaffold

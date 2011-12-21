@@ -24,70 +24,123 @@
 
 module Scaffold
 module Harness
-class Path < String
+class Path
    
-   def Path.build( path )
-      path.is_a?(Path) ? path : new(path)
-   end
-   
-   def absolute?()
-      starts_with?("/")
-   end
-   
-   def directory?()
-      ends_with?("/") 
-   end
-   
-   def to_directory()
-      directory? ? self : new(to_s + "/")
-   end
-   
-   def in_directory?( directory )
-      starts_with?(directory.ends_with?("/") ? directory : directory + "/")
-   end
-   
-   def offset( relative_path )
-      if relative_path.starts_with?("/") then
-         new(relative_path.to_s)
+   def self.build( path )
+      case path
+      when Path, NilClass
+         path
       else
-         directory = directory? ? self : parent_directory()
-         
-         while relative_path.starts_with?("../")
-            directory = directory.parent_directory()
-            relative_path = relative_path.slice(3..-1)
-         end
-         
-         if relative_path == ".." then
-            directory
-         elsif relative_path.starts_with?("/")
-            new(directory.to_s + path.slice(1..-1))
-         else
-            new(directory.to_s + path.to_s)
-         end
+         new(path.to_s)
       end
    end
    
-   def parent_directory()
-      return self if self == "/"
-      new(File.dirname(self)).to_directory()
-   end
-
-   def path_after( base_path )
-      base_path = base_path.slice(0..-2) if base_path.ends_with?("/")
-      return nil unless length > base_path.length && starts_with?(base_path)
-      Path.new(slice(base_path.length..-1)) 
+   def initialize( path )
+      @absolute  = path.starts_with?("/")
+      @directory = path.ends_with?("/")
+      @path      = path
    end
    
    def components()
-      @components ||= split("/", -1).slice((absolute? ? 1 : 0)..-1)
-   end
-   
-   def +( path )
-      Path.new(to_s + path)
+      if @components.nil? then
+         if @path.empty? or @path == "/" then
+            @components = []
+         else
+            @components = @path.split("/").slice((absolute? ? 1 : 0)..(directory? ? -2 : -1))
+         end
+      end
+         
+      @components
    end
    
    def to_s()
-      String.new(self)
+      return @path
+   end
+   
+   def absolute?()
+      @absolute
+   end
+   
+   def directory?()
+      @directory
+   end
+   
+   def empty?()
+      components.empty?
+   end
+   
+   def to_directory()
+      return @directory ? self : Path.new(@path + "/")
+   end
+   
+   def to_file()
+      return @directory ? Path.new(@path.slice(0..-2)) : self
+   end
+   
+   def in_directory?( directory )
+      directory = directory.to_s
+      @path.starts_with?(directory.ends_with?("/") ? directory : directory + "/")
+   end
+   
+   def parent_directory()
+      return self if @path == "/"
+      new(File.dirname(@path)).to_directory()
+   end
+   
+   def to_relative_path()
+      absolute? ? self.class.new(@path.slice(1..-1)) : self
+   end
+   
+   def offset( relative_path )
+      relative_path = Path.build(relative_path)
+      if relative_path.absolute? then
+         relative_path
+      elsif directory? then
+         self + relative_path
+      else
+         parent_directory + relative_path
+      end
+   end
+   
+   def path_after( base_path )
+      base_path = base_path.to_s
+      base_path = base_path.slice(0..-2) if base_path.ends_with?("/")
+      return nil unless @path.length > base_path.length && @path.starts_with?(base_path)
+      Path.new(@path.slice(base_path.length..-1)) 
+   end
+   
+   def +( path )
+      path = Path.build(path)
+      return (to_directory + path.to_relative_path).compact
+   end
+   
+   def compact()
+      main = if absolute? then
+         File.expand_path(@path, "/")  
+      else
+         output = []
+         (directory? ? @path.slice(0..-2) : @path).split("/").each do |piece|
+            if piece == "." then
+               # do nothing
+            elsif piece == ".." && !output.empty? && output.last != ".." then
+               output.pop
+            else
+               output.push(piece)
+            end
+         end
+         output.join("/")
+      end
+      
+      return self.class.new(main + (@directory ? "/" : ""))
+   end
+   
+   def rest( after = 1 )
+      return nil if components.length <= after
+      return components.slice(after..-1).join("/")
+   end
+   
+   def first()
+      return components.first
    end
    
 end # Path

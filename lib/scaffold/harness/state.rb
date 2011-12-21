@@ -30,9 +30,10 @@ require Scaffold.locate("language_preference.rb")
 module Scaffold
 module Harness
 class State
+   
 
    attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status
-   attr_accessor :content_type, :status, :headers, :response, :language_preference, :environment
+   attr_accessor :content_type, :status, :headers, :response, :language_preference, :environment, :route
    
    def secure?   ; return !!@secure   ; end
    def complete? ; return !!@response ; end
@@ -55,6 +56,7 @@ class State
       @environment         = @properties.fetch(:environment        , {}                   )
       @secure              = @properties.fetch(:secure             , url.scheme == "https")
       @language_preference = @properties.fetch(:language_preference, nil                  )
+      @route               = nil
 
       @content_type = "text/html";
       @status       = 200;
@@ -64,8 +66,6 @@ class State
       
       load_parameters()
    end
-   
-   
    
    
    #

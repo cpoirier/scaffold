@@ -37,17 +37,28 @@ class Application < Handler
    # Creates a new application. If you pass a block, it will be instance_eval'd to set up the
    # application.
    #
-   # Configuration keys:
-   #    +supported_languages+: a list of languages your application supports
-   #    +properties+: name/value pairs that override any user-supplied data
-   #    +defaults+: name/value pairs that fill in behind user-supplied data.
+   # Configuration keys
+   # ==================
+   #
+   # +supported_languages+: a list of languages your application supports (ie. en, fr, etc.)
+   # 
+   # +default_handler+: for simple applications, an alternative to defining the on_request
+   # handler; your +default_handler+ will be asked to route the request, and the result will
+   # be rendered; this is most appropriate for simple-purpose sites (like blogs)
+   #  
+   # +properties+: name/value pairs that override any user-supplied data
+   #
+   # +defaults+: name/value pairs that fill in behind user-supplied data
    
    def initialize( name, configuration = {}, &definer )
       @name                = name
       @properties          = configuration.fetch(:properties, {})
       @defaults            = configuration.fetch(:defaults  , {})
       @supported_languages = configuration.fetch(:supported_languages, ["en"])
+      @default_handler     = configuration.fetch(:default_handler, nil)
       @processor           = nil
+      
+      @not_found_handler = Handler.new()
       
       super(self, &definer)
    end
@@ -75,8 +86,18 @@ class Application < Handler
       request  = Rack::Request.new(rack_env)
       state    = Harness::State.build(self, request)
       language = state.language_preference ? state.language_preference.best_of(@supported_languages) : @supported_languages.first
+      result   = nil
+            
+      #
+      # Proccess the request. If the user defined a processor, use it. If they defined a 
+      # default_handler, route against it and render the result.
       
-      result = @processor.call(state, language)
+      if @processor then
+         result = @processor.call(state, language)
+      elsif @default_handler then
+         @default_handler.route(state)
+      end
+      
       if result.is_a?(Harness::Route) then
          result = result.complete.render(state)
       elsif !result.is_a?(Harness::State) then

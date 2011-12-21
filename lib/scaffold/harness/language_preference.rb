@@ -65,7 +65,6 @@ class LanguagePreference
    # list.
    
    def best( from = nil )
-      p from
       return @order.first if from.nil?
       
       best  = from.first
