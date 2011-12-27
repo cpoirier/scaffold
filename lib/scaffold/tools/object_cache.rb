@@ -23,10 +23,10 @@ require "monitor"
 
 #
 # Provides a tiered, entry-limited object cache, keyed by string, and replaced least-recently 
-# used first. Tiers are numbered from 0, with each successive tier holding less valuable entries.
-# You can share the ObjectCache across many contexts by using retreiving a 
-# Namespace from the namespaces set and using it to access the cache. For best results, avoid
-# using the cache for both direct- and namespaced-access.
+# used first. Tiers are numbered from 1, with each successive tier holding less valuable entries.
+# You can share the ObjectCache across many contexts by using retreiving a Namespace from the 
+# namespaces set and using it to access the cache. For best results, avoid using the cache for 
+# both direct- and namespaced-access, as we do no extra work to avoid naming collisions.
 
 module Scaffold
 module Tools
@@ -35,19 +35,18 @@ class ObjectCache
    attr_reader :namespaces
    
    def initialize( entry_limit )
-      @entry_limit   = entry_limit
-      @monitor       = Monitor.new()
-      @namespaces    = Hash.new(){|hash, name| @monitor.enter{hash[name] = Namespace.new(self, name)}}
-      @objects       = {}                                                   # name => object
-      @last_used     = {}                                                   # name => time
-      @tiers         = Hash.new(){|hash, tier| initialize_tier(tier)}       # tier => [names]
-      @tier_lookup   = {}                                                   # name => tier
-      @tier_order    = []
-      @tier_rorder   = []
-      @expiry_times  = {}
-      @expiry_queue  = []
+      @entry_limit       = entry_limit
+      @monitor           = Monitor.new()
+      @namespaces        = Hash.new(){|hash, name| @monitor.enter{hash[name] = Namespace.new(self, name)}}
+      @objects           = {}                                                   # name => object
+      @last_used_by_tier = Hash.new(){|hash, tier| initialize_tier(tier)}       # tier => {name => time}
+      @tier_lookup       = {}                                                   # name => tier
+      @tier_order        = []
+      @tier_rorder       = []
+      @expiry_times      = {}
+      @expiry_queue      = []
       
-      initialize_tier(0)
+      initialize_tier(1)
    end
    
    def empty?()
@@ -95,8 +94,10 @@ class ObjectCache
          @monitor.synchronize do
             if @objects.member?(name) then
                @objects.delete(name)
-               @tiers[@tier_lookup[name]].delete(name) unless source == :tier
-               @tier_lookup.delete(name)
+               
+               if number = @tier_lookup.delete(name) then
+                  @last_used_by_tier[number].delete(name) 
+               end
          
                if @expiry_times.member?(name) then
                   @expiry_times.delete(name)
@@ -117,26 +118,25 @@ class ObjectCache
    # within the cache. An object will be returned, but the routine cannot promise the value
    # will be stored in the cache, so do not assume so.
    
-   def retrieve( name, tier = 0, time_to_live = 0 )
+   def retrieve( name, tier = 1, time_to_live = 0 )
       eliminate_stale() unless @expiry_queue.empty?
-      return @objects.fetch(key, nil) unless block_given?
-
+      
       #
       # We want to avoid holding the monitor for long periods, and under no circumstances 
-      # should we hold it during the user's block (which has indeterminate length, and may
-      # even run HTTP requests to other servers). So, we do things in pieces. Note that
-      # we are (currently) willing to store nil, so we must not assume nil precludes presence.
+      # should we hold it during the user's block (which has indeterminate length). So, we do 
+      # things in pieces. Note that we are (currently) willing to store nil, so we must not 
+      # assume nil precludes presence.
 
       object = nil
       found  = false
       @monitor.synchronize do
          if found = @objects.member?(name) then
             object = @objects[name]
-            @last_used[name] = Time.now()
+            mark(name)
          end
       end
       
-      if !found then
+      if !found && block_given? then
          object = yield()
          store(key, object, tier, time_to_live)
       end
@@ -149,19 +149,19 @@ class ObjectCache
    # Similar to []=, but allows you to specify the object's tier and time_to_live. Returns
    # true if the value was stored, false otherwise.
    
-   def store( name, object, tier = 0, time_to_live = 0 )
-      stored = false 
+   def store( name, object, tier = 1, time_to_live = 0 )
+      return unless tier > 0
       
+      stored = false 
       @monitor.synchronize do
          eliminate_stale() unless @expiry_queue.empty?
          if delete(name) || !full? || eliminate_one(tier) then
-            @objects[name]     = object 
-            @last_used[name]   = Time.now()
-            @tier_lookup[name] = tier
-            @tiers[tier]      << name
+            @objects[name]                 = object 
+            @tier_lookup[name]             = tier
+            @last_used_by_tier[tier][name] = now
             
             if time_to_live > 0 then
-               expiry_time = Time.now + time_to_live
+               expiry_time = now + time_to_live
                insert_before = expiry_time + 1
                
                @expiry_times[name] = expiry_time
@@ -222,11 +222,28 @@ protected
       @monitor.synchronize do
          @tier_rorder.each do |tier|
             break if tier < from
-            next  if @tiers[tier].empty?
+            next  if @last_used_by_tier[tier].empty?
             
-            if delete(@tiers[tier].shift, :tier) then
-               eliminated = true
-               break
+            #
+            # Search for the best option to delete (the one least recently used).
+            
+            target_name = nil
+            target_at   = now + 1
+            @last_used_by_tier[tier].each do |name, at|
+               if at < target_at then
+                  target_name = name
+                  target_at   = at
+               end
+            end
+            
+            #
+            # Delete it.
+            
+            if target_name then
+               if delete(target_name) then
+                  eliminated = true
+                  break
+               end
             end
          end
       end
@@ -237,11 +254,11 @@ protected
    
    def eliminate_stale()      
       return false if @expiry_queue.empty?
-      return false if @expiry_times[@expiry_queue.first] > Time.now()
+      return false if @expiry_times[@expiry_queue.first] > now
 
       eliminated = false
       @monitor.synchronize do
-         while @expiry_times[@expiry_queue.first] <= Time.now()
+         while @expiry_times[@expiry_queue.first] <= now
             if delete(@expiry_queue.shift, :expiry_queue) then
                eliminated = true
             end
@@ -253,21 +270,31 @@ protected
 
 
    def initialize_tier( number )
-      @tiers[number] = []
-      @tier_order  = @tiers.keys.sort
-      @tier_rorder = @tier_order.reverse
-      @tiers[number]
+      if number > 0 && !@last_used_by_tier.member?(number) then
+         {}.tap do |tier|
+            @last_used_by_tier[number] = tier
+            @tier_order  = @last_used_by_tier.keys.sort
+            @tier_rorder = @tier_order.reverse
+         end
+      else
+         nil
+      end
+   end
+
+
+   def mark( name )
+      if number = @tier_lookup[name] then
+         @last_used_by_tier[number][name] = now
+      end
    end
    
+   def now()
+      Time.now.to_i
+   end
    
 end # Cache
 end # Tools
 end # Scaffold
 
-
-cache = Scaffold::Tools::ObjectCache.new(3)
-cache.store("about", 3, 0)
-cache.store("listings", 4, 0)
-cache.store("listings/winter-rain", 5, 1)
 
 
