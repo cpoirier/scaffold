@@ -19,7 +19,7 @@
 # =============================================================================================
 
 
-require File.expand_path(File.dirname(__FILE__)) + "/scaffold/baseline.rb"
+require "baseline"
 
 module Scaffold
    QualityAssurance = Baseline::QualityAssurance
