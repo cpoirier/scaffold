@@ -71,7 +71,7 @@ class LanguagePreference
       ratio = 0.0
       
       from.each do |language|
-         if ratios[language] > ratio then
+         if @ratios.member?(language) && @ratios[language] > ratio then
             best = language
          end
       end

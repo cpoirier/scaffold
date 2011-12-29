@@ -36,9 +36,9 @@ class Path
    end
    
    def initialize( path )
-      @absolute  = path.starts_with?("/")
-      @directory = path.ends_with?("/")
-      @path      = path
+      @path      = path.to_s
+      @absolute  = @path.starts_with?("/")
+      @directory = @path.ends_with?("/")
    end
    
    def components()
@@ -118,7 +118,7 @@ class Path
    
    def +( path )
       path = Path.build(path)
-      return (to_directory + path.to_relative_path).compact
+      return Path.new(to_directory.to_s + path.to_relative_path.to_s).compact
    end
    
    def compact()

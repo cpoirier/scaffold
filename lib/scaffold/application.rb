@@ -49,8 +49,8 @@ class Application < Handler
    #
    # +defaults+: name/value pairs that fill in behind user-supplied data
    #
-   # +name_cache_size+: causes the application to create an ObjectCache that you can use 
-   # when writing your name resolution code
+   # +name_cache_size+: causes the application to create an ObjectCache for use with name
+   # resolutions during routing (defaults to no cache)
    #
    # +user_agent_database+: a Tools::UserAgentDatabase, if you don't want the default
    
@@ -62,7 +62,7 @@ class Application < Handler
       @supported_languages = configuration.fetch(:supported_languages, ["en"])
       @default_handler     = configuration.fetch(:default_handler, nil)
       @user_agent_database = configuration.fetch(:user_agent_database){ Tools::UserAgentDatabase.build_from_user_agents_dot_org() }
-      @not_found_handler   = Handler.new()
+      @not_found_handler   = Handler.new(self, nil, true)
       @processor           = nil      
       @name_cache          = nil
       

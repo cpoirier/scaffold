@@ -32,7 +32,7 @@ module Harness
 class State
    
 
-   attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status, :language_preference, :user_agent, :environment
+   attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status, :language, :user_agent, :environment
    attr_accessor :content_type, :status, :headers, :response, :route
    
    def secure?   ; return !!@secure   ; end
@@ -51,11 +51,11 @@ class State
       @application     = application
       @url             = url
       @get_parameters  = url.parameters
-      @post_parameters = @properties.fetch(:post               , {}                   )
-      @cookies         = @properties.fetch(:cookies            , {}                   )
-      @environment     = @properties.fetch(:environment        , {}                   )
-      @secure          = @properties.fetch(:secure             , url.scheme == "https")
-      @user_agent      = @properties.fetch(:user_agent         , nil                  )
+      @post_parameters = @properties.fetch(:post       , {}                   )
+      @cookies         = @properties.fetch(:cookies    , {}                   )
+      @environment     = @properties.fetch(:environment, {}                   )
+      @secure          = @properties.fetch(:secure     , url.scheme == "https")
+      @user_agent      = @properties.fetch(:user_agent , nil                  )
 
       @language = @properties.fetch(:language) do
          if @properties.member?(:language_preference) then

@@ -103,8 +103,8 @@ class UserAgentDatabase
             block = xml.slice(position..marker)
             position = marker + 13
 
-            string = string_pattern.match(block){|m| m[1]}.gsub("&quot;", '"').gsub("&apos;", "'").gsub("&lt;", "<").gsub("&gt;", ">").gsub("&amp;", "&")
-            types  = type_pattern.match(block){|m| m[1]}.split(" ")
+            string = string_pattern.match(block){|m| m[1]}.to_s.gsub("&quot;", '"').gsub("&apos;", "'").gsub("&lt;", "<").gsub("&gt;", ">").gsub("&amp;", "&")
+            types  = type_pattern.match(block){|m| m[1]}.to_s.split(" ")
 
             bits = 0
             types.each do |code|

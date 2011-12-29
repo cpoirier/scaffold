@@ -24,6 +24,9 @@
 
 module Scaffold
 class Handler
+   
+   include Baseline::QualityAssurance
+   extend  Baseline::QualityAssurance
 
    #
    # If you'd rather not subclass, you can fill in the Handler by passing a block to call
@@ -73,8 +76,12 @@ class Handler
       if result.is_a?(Harness::Route) then
          result = (route = result).complete(state).render(state)
       else
+         result = state
+      end
       
       assert(result.complete?, "processing did not complete the state")
+      
+      result
    end   
    
    
@@ -102,9 +109,9 @@ class Handler
       if @application.name_cache then
          @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
             if handler = @resolver.call(name, context_route, container_url) then
-               handler, @application.user_agent_database.browser?(state.user_agent) ? 1 : 2
+               [handler, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
             else
-               nil, 0
+               [nil, 0]
             end
          end
       else
@@ -136,10 +143,6 @@ class Handler
    end
    
    
-   
-   
-private
-
    
    
 end # Handler

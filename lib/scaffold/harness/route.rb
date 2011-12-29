@@ -28,7 +28,7 @@ class Route
       
    attr_reader :parent, :name, :handler, :path, :unresolved, :status, :redirect
 
-   def initialize( handler, parent, name, handler, unresolved, terminal = false )
+   def initialize( parent, name, handler, unresolved, terminal = false )
       @parent     = parent
       @name       = name
       @path       = @parent ? @parent.path + name : Path.new(name)
