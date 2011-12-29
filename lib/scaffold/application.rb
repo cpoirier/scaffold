@@ -72,15 +72,13 @@ class Application < Handler
       end
       
       if @default_handler then
-         on_request do |state|
+         on_process do |state|
             @default_handler.process(state)
          end
       end
                   
       super(self, &definer)
    end
-
-   alias on_request on_process
 
 
    #
