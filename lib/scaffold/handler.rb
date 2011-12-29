@@ -99,12 +99,16 @@ class Handler
       return nil unless defined?(@resolver)
       
       container_url = context_route.url(state.url)
-      @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
-         if handler = @resolver.call(name, context_route, container_url) then
-            handler, @application.user_agent_database.browser?(state.user_agent) ? 1 : 2
-         else
-            nil, 0
+      if @application.name_cache then
+         @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
+            if handler = @resolver.call(name, context_route, container_url) then
+               handler, @application.user_agent_database.browser?(state.user_agent) ? 1 : 2
+            else
+               nil, 0
+            end
          end
+      else
+         @resolver.call(name, context_route, container_url)
       end
    end
 

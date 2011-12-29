@@ -30,8 +30,7 @@ require Scaffold.locate("harness/rack.rb")
 module Scaffold
 class Application < Handler
 
-   attr_reader :strings, :properties, :defaults, :configuration, :name_cache, :user_agent_database
-   attr_accessor :supported_languages
+   attr_reader :strings, :properties, :defaults, :configuration, :name_cache, :user_agent_database, :supported_languages
    
    #
    # Creates a new application. If you pass a block, it will be instance_eval'd to set up the
