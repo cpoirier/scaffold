@@ -122,7 +122,7 @@ class Handler
    # all your adjuncts (access denied is another good example) at the Application level.
    
    def define_adjunct( purpose, handler )
-      @adjuncts = {} unless defined?(@adjunts)
+      @adjuncts = {} unless defined?(@adjuncts)
       @adjuncts[purpose] = handler
    end
      
@@ -131,7 +131,7 @@ class Handler
    # discussion.
    
    def adjunct_for( purpose )
-      return nil unless defined?(@adjunts)
+      return nil unless defined?(@adjuncts)
       @adjuncts[purpose]
    end
    
