@@ -32,14 +32,14 @@ module Harness
 class State
    
 
-   attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status
-   attr_accessor :content_type, :status, :headers, :response, :language_preference, :environment, :route
+   attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status, :language_preference, :user_agent, :environment
+   attr_accessor :content_type, :status, :headers, :response, :route
    
    def secure?   ; return !!@secure   ; end
    def complete? ; return !!@response ; end
    
    def self.build( application, rack_request )
-      new(application, URL.build(rack_request), :post => rack_request.POST, :cookies => rack_request.cookies, :language_preference => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), :environment => rack_request.env)
+      new(application, URL.build(rack_request), :post => rack_request.POST, :cookies => rack_request.cookies, :language_preference => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), :user_agent => rack_request.env["HTTP_USER_AGENT"], :environment => rack_request.env)
    end
    
    def initialize( application, url, properties = {} )
@@ -47,27 +47,35 @@ class State
       properties[:url        ] = url
       properties[:get        ] = url.parameters
       
-      @properties          = application.properties.update(properties)
-      @application         = application
-      @url                 = url
-      @get_parameters      = url.parameters
-      @post_parameters     = @properties.fetch(:post               , {}                   )
-      @cookies             = @properties.fetch(:cookies            , {}                   )
-      @environment         = @properties.fetch(:environment        , {}                   )
-      @secure              = @properties.fetch(:secure             , url.scheme == "https")
-      @language_preference = @properties.fetch(:language_preference, nil                  )
-      @route               = nil
+      @properties      = application.properties.update(properties)
+      @application     = application
+      @url             = url
+      @get_parameters  = url.parameters
+      @post_parameters = @properties.fetch(:post               , {}                   )
+      @cookies         = @properties.fetch(:cookies            , {}                   )
+      @environment     = @properties.fetch(:environment        , {}                   )
+      @secure          = @properties.fetch(:secure             , url.scheme == "https")
+      @user_agent      = @properties.fetch(:user_agent         , nil                  )
+
+      @language = @properties.fetch(:language) do
+         if @properties.member?(:language_preference) then
+            @properties.fetch(:language_preference).best_of(@application.supported_languages)
+         else
+            @application.supported_languages.first
+         end
+      end
 
       @content_type = "text/html";
       @status       = 200;
       @response     = nil
       @cookie_sets  = {}
       @headers      = []
+      @route        = nil
       
       load_parameters()
    end
    
-   
+      
    #
    # Gets a property from the state. State properties are picked up in the following priority: 
    # direct sets on the state; application properties; post parameters; get parameters; 
@@ -173,7 +181,7 @@ class State
       secure = @secure if secure.nil?
       url    = @url.offset(path, get_parameters, false)
       
-      new(application, url, post_parameters, cookies, secure)
+      new(application, url, :post => post_parameters, :cookies => rack_request.cookies, :secure => secure, :language_preference => @language_preference, :user_agent => @user_agent)
    end
       
 

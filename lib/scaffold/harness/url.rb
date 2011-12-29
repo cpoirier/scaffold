@@ -97,6 +97,10 @@ class URL
       end
    end
    
+   def +( relative_path )
+      offset(relative_path)
+   end
+   
    
    #
    # Encodes a path for inclusion in a URL.

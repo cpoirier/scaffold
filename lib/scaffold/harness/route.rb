@@ -55,6 +55,10 @@ class Route
    def application()
       @handler.application
    end
+   
+   def url( base, relative_application = true )
+      base.offset(relative_application ? @path.to_absolute : @path)
+   end
 
    #
    # Retrieves the primary or an adjunct handler for this route.
@@ -90,6 +94,17 @@ class Route
       end
    end
 
+   
+   #
+   # Follows the next() chain until it finds a complete?() route to return.
+   
+   def complete( state )
+      route = self
+      until route.complete?
+         route = route.next(state) 
+      end
+      route
+   end
    
 end # Route
 end # Harness

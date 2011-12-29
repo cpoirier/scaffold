@@ -44,7 +44,71 @@ class Handler
       @is_routing_sink
    end
 
+   def on_resolve(&block)
+      @resolver = block
+   end
    
+   
+   #
+   # Defines the event handler for the main process() loop. Your block will be passed a 
+   # Harness::State with all the request information, and you must complete it before you
+   # return it. How you process the request is up to you: you can directly generate the 
+   # content (for simple sites), use the routing system to pick an appropriate Handler, or
+   # implement a system of your own imaging. As a convenience, your block can return a Route
+   # instead of the State, and it will be completed and rendered for you.
+   
+   def on_process(&block)
+      @processor = block
+   end
+
+
+   #
+   # The master entry point for all handler activity: processes a request and fills in the response 
+   # (all from/to the State). Standard processing is to route the request (with this handler as root) 
+   # and render the result. Calls your on_process() proc instead, if applicable.
+   
+   def process( state )
+      result = @processor ? @processor.call(state) : route(state)
+
+      if result.is_a?(Harness::Route) then
+         result = (route = result).complete(state).render(state)
+      else
+      
+      assert(result.complete?, "processing did not complete the state")
+   end   
+   
+   
+   #
+   # Routes the specified URL from this handler to the handler that is being addressed.
+   # Note that passing a state is optional. The URL contains the GET parameters already,
+   # so if you can route based solely on that, the completed route will be easily
+   # cacheable. If you use the state, things get more sticky.
+   
+   def route( state, url = nil )
+      url = state.url if url.nil?
+      Route.new(nil, nil, self, url.requested_path).complete(state)
+   end
+   
+      
+   #
+   # Returns a handler for the given name, or nil, if this handler doesn't recognize the name. 
+   # Name resolution should depend only on the visible URL. Considerations of session, post 
+   # parameters, cookies, etc., should be kept for processing.
+   
+   def resolve( name, context_route, state )
+      return nil unless defined?(@resolver)
+      
+      container_url = context_route.url(state.url)
+      @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
+         if handler = @resolver.call(name, context_route, container_url) then
+            handler, @application.user_agent_database.browser?(state.user_agent) ? 1 : 2
+         else
+            nil, 0
+         end
+      end
+   end
+
+
    #
    # Adds an adjunct (secondary or peripheral) handler to this one for a particular purpose.
    # You may never need to use this routine, but it's the way the routing system finds a 
@@ -57,8 +121,7 @@ class Handler
       @adjuncts = {} unless defined?(@adjunts)
       @adjuncts[purpose] = handler
    end
-   
-   
+     
    #
    # Retrieves the defined adjunct for the named purpose. See define_adjunct() for a 
    # discussion.
@@ -68,175 +131,8 @@ class Handler
       @adjuncts[purpose]
    end
    
-      
-   def on_resolve(&block)
-      @resolver = block
-   end
-   
-   def on_process(&block)
-      @action = block
-   end
-
-   attr_writer :handles_not_found
-   attr_writer :handles_index_page
-   
-   def respond_not_found()
-      if @on_not_found then
-         @on_not_found.call()
-      elsif our container from the route then
-         @container.respond_not_found()
-      else
-         state.status = 404
-         state.response = ...
-      end
-         
-         
-   end
-
-   #
-   # 
-   
-   def process( state, route = nil )
-      
-      if !is_container then
-         
-      if it's not a container, it can't route!!!
-         
-      #
-      # First, decide if we have routing work to do.
-      
-      if route then
-         if route.complete? then
-            if route.directory? ^ @is_directory then
-               
-         unless route.complete? 
-            if @resolver
-         end
-      elsif !state.url.requested_path.empty? then
-      end
-      
-      
-      
-      if route = state.route_from(self) then
-         route.handler.
-      
-      
-      
-      
-   end
-   
-
-
-   #
-   #
-   
-   def route( path )
-      route = Route.new(nill, nil, self, path)
-      until route.complete?
-         if child = @handler.resolve(@tail.first, self) then
-            return self.new(@tail.first, child, @tail.rest, self)
-         end
-         
-      end
-      
-   end
-   
-   #
-   # Routes the specified URL from this handler to the handler that is being addressed.
-   # Note that passing a state is optional. The URL contains the GET parameters already,
-   # so if you can route based solely on that, the completed route will be easily
-   # cacheable. If you use the state, things get more sticky.
-   
-   def route( url, state = nil )
-      url = state.url if url.nil && state.exists?
-      
-      route = Route.new(nil, nil, self, url.requested_path)
-      until route.nil? || route.complete?
-         if possible = route.next() then
-            route = possible
-         else
-            until route.nil? || route.complete?
-               if route.handler.handles_not_found? then
-                  route.accept_not_found()
-               else
-                  route = route.previous
-               end
-            end
-         end
-      end
-      
-      route
-   end
-   
-   #
-   # Runs the standard routing process on the url requested_path, from an anchor handler of your 
-   # choosing to the requested target. If you don't want to use requested_path, you can pass one
-   # of your own.
-   
-   def route_from( root_handler, path = nil )
-      route = Route.new(nil, nil, root_handler, Path.build(path) || @url.requested_path)
-      while @route.nil?
-         if route.remaining.empty? then
-            if route.remaining.directory? ^ route.handler.container? then
-               @route = false
-               @status = STATUS_REDIRECT
-               add_header("Location", url.offset(route.remaining.directory? ? route.path_here : route.path_here.to_directory())
-            else
-               @route = route
-            end
-            
-                  
-      until route.remaining.components.empty? 
-         
-         if route.handler.container? then
-            if route.remaining.directory? then
-               
-            name = route.next()
-            if child = route.handler.resolve(name, self) then
-               route = Route.new(route, name)
-         else
-            #
-            # No directory listings, no routing inside. 
-         end
-      end
-   end
    
    
-   
-   
-   
-   
-   
-   #
-   # Returns a handler and state for the given name, or nil, if this handler doesn't recognize 
-   # the name. As with all Handler operations, you are responsible for your own access control.
-   
-   def resolve( name, state )
-      return defined?(@resolver) ? @resolver.call(name, state) : nil
-   end
-   
-
-   
-
-
-   
-   #
-   # Returns true if the handler's action can do something with a name it failed to resolve.
-   
-   def handles_not_found?()
-      defined?(@handles_not_found ) && @handles_not_found
-   end
-   
-   
-   #
-   # Returns true if the handler's action can do something with a trailing slash on the
-   # resolved name.
-   
-   def handles_index_page?()
-      defined?(@handles_index_page) && @handles_index_page
-   end
-   
-
    
 private
 

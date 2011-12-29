@@ -115,10 +115,16 @@ class ObjectCache
    
    #
    # Similar to [], but allows you to pass a block to call to produce the object if not found
-   # within the cache. An object will be returned, but the routine cannot promise the value
-   # will be stored in the cache, so do not assume so.
+   # within the cache. You may return up to three values from your block, although only the first
+   # is required: object, tier, time_to_live. +tier+ defaults to 1; if present and 0, however, 
+   # the object will be returned but not added to the cache. +time_to_live+ defaults to 0. 
+   #
+   # Note: nil is a valid result, so if you return nil for +object+, and don't want it stored in 
+   # the cache, return 0 for +tier+.
+   # 
+   # Note: the routine cannot promise +object+ will be stored in the cache, so do not assume so.
    
-   def retrieve( name, tier = 1, time_to_live = 0 )
+   def retrieve( name )
       eliminate_stale() unless @expiry_queue.empty?
       
       #
@@ -137,8 +143,10 @@ class ObjectCache
       end
       
       if !found && block_given? then
-         object = yield()
-         store(key, object, tier, time_to_live)
+         object, tier, time_to_live = yield()
+         unless tier === 0
+            store(key, object, tier.to_i || 1, time_to_live.to_i || 0)
+         end
       end
 
       object

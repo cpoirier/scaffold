@@ -91,6 +91,13 @@ class Path
       absolute? ? self.class.new(@path.slice(1..-1)) : self
    end
    
+   def to_absolute_path()
+      absolute? ? self : Path.new("/" + @path)
+   end
+   
+   alias to_absolute to_absolute_path
+   alias to_relative to_relative_path
+   
    def offset( relative_path )
       relative_path = Path.build(relative_path)
       if relative_path.absolute? then

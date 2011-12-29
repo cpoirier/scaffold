@@ -30,7 +30,7 @@ require Scaffold.locate("harness/rack.rb")
 module Scaffold
 class Application < Handler
 
-   attr_reader :strings, :properties, :defaults, :configuration
+   attr_reader :strings, :properties, :defaults, :configuration, :name_cache, :user_agent_database
    attr_accessor :supported_languages
    
    #
@@ -49,33 +49,38 @@ class Application < Handler
    # +properties+: name/value pairs that override any user-supplied data
    #
    # +defaults+: name/value pairs that fill in behind user-supplied data
+   #
+   # +name_cache_size+: causes the application to create an ObjectCache that you can use 
+   # when writing your name resolution code
+   #
+   # +user_agent_database+: a Tools::UserAgentDatabase, if you don't want the default
    
    def initialize( name, configuration = {}, &definer )
       @name                = name
+      @configuration       = configuration
       @properties          = configuration.fetch(:properties, {})
       @defaults            = configuration.fetch(:defaults  , {})
       @supported_languages = configuration.fetch(:supported_languages, ["en"])
       @default_handler     = configuration.fetch(:default_handler, nil)
-      @processor           = nil
+      @user_agent_database = configuration.fetch(:user_agent_database){ Tools::UserAgentDatabase.build_from_user_agents_dot_org() }
+      @not_found_handler   = Handler.new()
+      @processor           = nil      
+      @name_cache          = nil
       
-      @not_found_handler = Handler.new()
+      if size = configuration.fetch(:name_cache_size, 0) then
+         @name_cache = Tools::ObjectCache.new(size)
+      end
       
+      if @default_handler then
+         on_request do |state|
+            @default_handler.process(state)
+         end
+      end
+                  
       super(self, &definer)
    end
-   
-   
-   #
-   # Defines the handler for each request to the Application. Your block will be passed a 
-   # Harness::State with all the context information, and which of your supported languages
-   # best fits the user's preferences. You must return the completed state. How 
-   # you process the request is up to you: you can directly generate the content (for simple 
-   # sites), using the Handler routing system to pick an appropriate handler and have it render 
-   # the content; or implement a system of your own imagining. As a convenience, your block can 
-   # return a Route instead of the State and it will be completed and rendered for you.
-   
-   def on_request(&block)
-      @processor = block
-   end
+
+   alias on_request on_process
 
 
    #
@@ -83,66 +88,18 @@ class Application < Handler
    # You probably won't need to call this: Rack will do it for your.
    
    def process_request( rack_env )
-      request  = Rack::Request.new(rack_env)
-      state    = Harness::State.build(self, request)
-      language = state.language_preference ? state.language_preference.best_of(@supported_languages) : @supported_languages.first
-      result   = nil
-            
-      #
-      # Proccess the request. If the user defined a processor, use it. If they defined a 
-      # default_handler, route against it and render the result.
-      
-      if @processor then
-         result = @processor.call(state, language)
-      elsif @default_handler then
-         @default_handler.route(state)
-      end
-      
-      if result.is_a?(Harness::Route) then
-         result = result.complete.render(state)
-      elsif !result.is_a?(Harness::State) then
-         result = state
-      end
-      
-      if result.complete? then
-         if result.response.is_a?(Proc) then
-            Rack::Response.new(nil, result.status, result.headers).finish(&result.response)
-         else
-            Rack::Response.new(result.response, result.status, result.headers)
-         end
+      request = Rack::Request.new(rack_env)
+      state   = Harness::State.build(self, request)
+      result  = process(state)     
+
+      if result.response.is_a?(Proc) then
+         Rack::Response.new(nil, result.status, result.headers).finish(&result.response)
       else
-         fail_todo("how do we handle an incomplete state as response?")
+         Rack::Response.new(result.response, result.status, result.headers)
       end
    end
    
    alias call process_request
-      
-   
-   # #
-   # # Attempts to route a request to the appropriate Handler. Returns a properly marked, ready 
-   # # to go Route or nil. 
-   # 
-   # def route( anchor, state )
-   #    route = anchor
-   #    until route.nil? || route.complete?
-   #       if possible = route.next() then
-   #          route = possible
-   #       else
-   #          until route.nil? || route.complete?
-   #             if route.handler.handles_not_found? then
-   #                route.accept_not_found()
-   #             else
-   #                route = route.previous
-   #             end
-   #          end
-   #       end
-   #    end
-   #    
-   #    route
-   # end
-   
-
-private
 
 
    
