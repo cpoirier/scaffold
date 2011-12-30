@@ -43,7 +43,7 @@ class Layout
       end
    end
    
-   def define( name, default = nil, &block )
+   def define_string( name, default = nil, &block )
       @strings[name] = default || block
    end
    

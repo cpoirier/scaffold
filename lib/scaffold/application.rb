@@ -60,7 +60,6 @@ class Application < Handler
       @properties          = configuration.fetch(:properties, {})
       @defaults            = configuration.fetch(:defaults  , {})
       @supported_languages = configuration.fetch(:supported_languages, ["en"])
-      @default_handler     = configuration.fetch(:default_handler, nil)
       @user_agent_database = configuration.fetch(:user_agent_database){ Tools::UserAgentDatabase.build_from_user_agents_dot_org() }
       @not_found_handler   = Handler.new(self, nil, true)
       @processor           = nil      
@@ -70,15 +69,9 @@ class Application < Handler
          @name_cache = Tools::ObjectCache.new(size)
       end
       
-      if @default_handler then
-         on_process do |state|
-            @default_handler.process(state)
-         end
-      end
-                  
       super(self, &definer)
    end
-
+   
 
    #
    # Processes a request from Rack Request to Rack Response, using the Scaffold system.

@@ -26,37 +26,27 @@ module Scaffold
 module Presentation
 class Theme
    
-   #
-   # Defines a new Theme and registers it for access.
+   attr_reader :name, :properties, :layouts
    
-   def self.define( name, description, additional = {} )
-      new(description, additional).tap do |theme|
-         @@themes[name] = theme
-      end
+   def initialize( name, properties = {}, &definer )
+      @name        = name
+      @properties  = properties
+      @layouts     = {}
+      
+      instance_eval(&definer) if definer
    end
-   
-   attr_reader :identifier, :name, :description, :additional, :layouts
    
 
    #
    # Defines a new Layout within the Theme and returns it for your use.
    
-   def define_layout( name, description, additional = {} )
-      Layout.new(name, description, additional).tap do |layout|
+   def define_layout( name, description, &definer )
+      Layout.new(name, description, &definer).tap do |layout|
          @layouts[name] = layout
       end
    end
    
 
-private
-   def initialize( name, description, additional = {} )
-      @name        = name
-      @description = description
-      @additional  = additional
-      @layouts     = {}
-   end
-
-   @@themes = {}
 
 end # Theme
 end # Presentation
