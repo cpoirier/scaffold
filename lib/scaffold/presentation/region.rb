@@ -20,11 +20,11 @@
 
 
 #
-# An Area within a Layout. These are places Widgets and content can be placed.
+# A Region within a Layout. These are places content can be placed.
 
 module Scaffold
 module Presentation
-class Area
+class Region
 
    def initialize( name, description, multivalued )
       @name        = name
@@ -38,6 +38,6 @@ class Area
       @multivalued
    end
 
-end # Area
+end # Region
 end # Presentation
 end # Scaffold
