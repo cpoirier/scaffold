@@ -29,7 +29,7 @@ class Layout
    def initialize( name, description, &definer )
       @name          = name
       @description   = description
-      @areas         = {}         
+      @regions       = {}         
       @strings       = {}
       
       instance_eval(&definer) if definer
@@ -37,14 +37,20 @@ class Layout
    
    attr_reader :name, :areas, :strings
    
-   def define_area( name, description, allow_multiples = false )
-      Area.new(self, name, description, allow_multiples).tap do |area|
-         @areas[area.name] = area
+   def define_region( name, description, allow_multiples = false )
+      unless description.is_a?(String)
+         allow_multiples = !!description
+         description = nil
+      end
+      
+      Region.new(name, description, allow_multiples).tap do |region|
+         @regions[region.name] = area
       end
    end
    
-   def define_string( name, default = nil, &block )
+   def define_string( name, default = nil, description = nil, &block )
       @strings[name] = default || block
+      @string_descriptions[name] = description
    end
    
    def before_render( proc = nil, &block )

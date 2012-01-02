@@ -126,7 +126,7 @@ class Layout < HTML5
    #
    # Renders all collected <head> headers into the stream.
    
-   def render_headers!()
+   def render_headers()
       @scripts.each do |url, async|
          if async then
             script :src => url, :async => "async"
@@ -140,7 +140,7 @@ class Layout < HTML5
       end
       
       @headers.each do |header|
-         raw! header
+         raw header
       end
    end
    
@@ -157,7 +157,7 @@ class Layout < HTML5
    #
    # Adds a script to the Layout. Must be called before you render_headers!
    
-   def add_script!( url, async = false )
+   def add_script( url, async = false )
       @scripts << [url, async] if @scripts.none?{|existing, async| existing == url}
    end
 
@@ -165,7 +165,7 @@ class Layout < HTML5
    #
    # Adds a stylesheet to the Layout. Must be called before you render_headers!
    
-   def add_stylesheet!( url, media = "all" )
+   def add_stylesheet( url, media = "all" )
       @stylesheets << [url, media] if @stylesheets.none?{|existing, media| existing == url}
    end
 
@@ -173,7 +173,7 @@ class Layout < HTML5
    #
    # Adds a general header to the Layout. Must be called before you render_headers!
    
-   def add_header!( tag )
+   def add_header( tag )
       @headers << tag unless @headers.member?(header)
    end
 

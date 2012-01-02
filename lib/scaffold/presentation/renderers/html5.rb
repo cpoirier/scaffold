@@ -29,8 +29,7 @@
 # if there has been a problem. The class keeps Markaby's clean CSS handling.
 # 
 # Example:
-#
-#    b = Scaffold::Presentation::Renderers::HTML5Builder.new(true)
+#    b = Scaffold::Presentation::Renderers::HTML5.new(true)
 #    b.html do
 #       head do 
 #          meta :charset => "UTF-8"
@@ -40,24 +39,23 @@
 #       body do
 #          p.test.class1.some_id! "This is just a & test." 
 #          ul do
+#             li "No ID"
 #             li.option1! "Option 1"
-#             li.option2!("data-value" => "twenty & three"){ text! "Option 2" }
+#             li.option2!("data-value" => "twenty & three"){ text "Option 2" }
 #             li.option3! "Option 3"
 #          end
-#          comment! "The next p should be empty."
+#          comment "The next p should be empty."
 #          p
-#          p { raw! "&nbsp;" }
+#          p { raw "&nbsp;" }
 #       end
 #    end
-#    
-#    puts b.to_s
 
 module Scaffold
 module Presentation
 module Renderers
 class HTML5
    
-   def initialize( stream = [], pretty_print = false, &block )
+   def initialize( pretty_print = false, stream = [], &block )
       @stream        = []
       @real_stream   = stream
       @pretty_print  = pretty_print
@@ -66,30 +64,81 @@ class HTML5
       @ids           = {}
       @duplicate_ids = {}
       
-      capture!(&block) unless block.nil?
+      capture(&block) unless block.nil?
    end
 
+
+   #
+   # Starts an HTML stream.
+   
    def html( language = "en", attrs = {}, &block )
       @stream << "<!DOCTYPE html>"
       @stream << "\n" if @pretty_print
-      make!( :html, {:lang => language}.update(attrs), &block )
-      flush!
+      make( :html, {:lang => language}.update(attrs), &block )
+      flush
+   end
+
+
+   #
+   # Outputs raw text to the stream.
+   
+   def raw( text )
+      @stream << text
+   end
+
+   
+   #
+   # Outputs encoded text to the stream.
+   
+   def text( text )
+      @stream << encode(text.to_s)
    end
    
+   
+   #
+   # Outputs a comment to the stream.
+   
+   def comment( text = nil, &block )
+      make_indent if @indent > 0
+      
+      @serial = @serial + 1
+      @stream << "<!-- "
+      
+      if text then 
+         @stream << encode(text)
+      elsif !block.nil? then
+         capture(&block)
+      end
+      
+      @stream << " -->"
+   end
+      
+
+   # ==========================================================================================
+
+
+   #
+   # Returns the stream object.
+   
    def to_stream()
-      flush!
+      flush
       @real_stream
    end
    
+   
+   #
+   # Returns the stream as a string, if possible. Returns nil if the stream isn't buffered.
+   
    def to_s()
-      flush!
+      flush
       @real_stream.is_an?(Array) ? @real_stream.join() : nil
    end
+
 
    #
    # Allows you to reuse the renderer with the same or another stream.
    
-   def reset!( new_stream = nil )
+   def reset( new_stream = nil )
       if new_stream then
          @real_stream = new_stream
       else
@@ -102,33 +151,18 @@ class HTML5
       @indent = 0
    end
    
-   def capture!(&block)
+   
+   #
+   # Runs your block as a DSL against this renderer.
+   
+   def capture(&block)
       instance_eval(&block)
    end
-   
-   def raw!( text )
-      @stream << text
-   end
-   
-   def text!( text )
-      @stream << escape!(text.to_s)
-   end
-   
-   def comment!( text = nil, &block )
-      make_indent! if @indent > 0
-      
-      @serial = @serial + 1
-      @stream << "<!-- "
-      
-      if text then 
-         @stream << escape!(text)
-      elsif !block.nil? then
-         capture!(&block)
-      end
-      
-      @stream << " -->"
-   end
-   
+
+
+   # ==========================================================================================
+
+
    def method_missing( symbol, *args, &block )
       
       #
@@ -138,16 +172,14 @@ class HTML5
       # undo the empty tag and replace it, should it be used.
       
       result = args.empty? && block.nil? ? CSSProxy.new(self, symbol, @stream.length, @indent, @serial) : nil
-      make!(symbol, *args, &block)
+      make(symbol, *args, &block)
       result
    end
-
-
 
    WELL_KNOWN_TAGS     = %w[head title base meta link style script body div p ul ol li dl dt dd address hr pre blockquote a span br em strong dfn code samp kbd var cite abbr acronym q sub sup tt i b big small object param img map area form label input select optgroup option textarea fieldset legend button table caption colgroup col thead tfoot tbody tr th td h1 h2 h3 h4 h5 h6].collect{|i| i.intern}
    SELF_CLOSING_TAGS   = %w[base meta link hr br param img area input col frame].collect{|i| i.intern}
    CDATA_TAGS          = %w[code].collect{|i| i.intern}
-   CHARACTER_ESCAPES   = {"&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "'" => "&apos;", "\"" => "&quot;"}
+   ENTITIES            = {"&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "'" => "&apos;", "\"" => "&quot;"}
 
    SELF_CLOSING_LOOKUP = {}.tap{|h| SELF_CLOSING_TAGS.each{|tag| h[tag] = true}}
    
@@ -155,7 +187,7 @@ class HTML5
       class_eval <<-CODE, __FILE__, __LINE__
          def #{name}(*args, &block)
             result = args.empty? && block.nil? ? CSSProxy.new(self, #{name.inspect}, @stream.length, @indent, @serial) : nil
-            make!(#{name.inspect}, *args, &block)
+            make(#{name.inspect}, *args, &block)
             result
          end
       CODE
@@ -163,9 +195,9 @@ class HTML5
    
 
 protected
-   def make!( symbol, *args, &block )
-      flush!
-      make_indent! if @indent > 0
+   def make( symbol, *args, &block )
+      flush
+      make_indent if @indent > 0
      
       serial = @serial = @serial + 1
       @stream << "<"
@@ -177,12 +209,12 @@ protected
          when Hash
             arg.each do |name, value|
                case name = name.to_s
-               when "text!"
-                  body << escape!(value.to_s)
-               when "raw!"
+               when "text"
+                  body << encode(value.to_s)
+               when "raw"
                   body << value.to_s
                else
-                  make_attribute!(name, value)
+                  make_attribute(name, value)
                
                   if name == "id" then
                      value = value.to_s
@@ -197,7 +229,7 @@ protected
          when Array
             body.concat arg.collect{|i| i.to_s}
          else
-            body << escape!(arg.to_s)
+            body << encode(arg.to_s)
          end
       end
 
@@ -208,11 +240,11 @@ protected
 
          @indent += 1 if @pretty_print
          @stream.concat( body )
-         capture!(&block) unless block.nil?
+         capture(&block) unless block.nil?
       
          if @pretty_print then
             @indent -= 1 
-            make_indent! if serial != @serial
+            make_indent if serial != @serial
          end
 
          @stream << "</"
@@ -223,12 +255,12 @@ protected
       nil
    end
    
-   def make_indent!()
+   def make_indent()
       @stream << "\n"
       @stream << " " * @indent * 2
    end
    
-   def make_attribute!( name, value )
+   def make_attribute( name, value )
       @stream << " "
       @stream << name.to_s
       @stream << "=\""
@@ -236,24 +268,23 @@ protected
       if value.is_a?(Array) then
          @stream << value.collect{|i| i.to_s}.join(" ")
       else
-         @stream << escape!(value)
+         @stream << encode(value)
       end
       
       @stream << "\""
    end
    
-   def escape!( raw )
-      # .gsub(/&amp;((?:#x[0-9a-fA-F]+)|(?:#[0-9]+)|\w+);/, "&\1;" )
-      raw.gsub(/[&<>\'\"]/){|s| CHARACTER_ESCAPES[s]}
+   def encode( raw )
+      raw.gsub(/[&<>\'\"]/){|s| ENTITIES[s]}
    end
 
-   def flush!()
+   def flush()
       unless @stream.empty?
          @real_stream.concat @stream
          @stream.clear()
       end
    end
-
+   
 
    #
    # Wraps a Builder to allow CSS class and ID specifications as follows:
@@ -300,17 +331,16 @@ protected
                end
             end
             
-            tag      = @tag
-            position = @position
-            indent   = @indent  
-            serial   = @serial  
+            tag    = @tag
+            indent = @indent  
+            serial = @serial  
             
             @builder.instance_eval do
-               @stream.slice!(position..-1)
+               @stream.clear()
                @indent = indent
                @serial = serial 
                
-               make!( tag, *args, &block )
+               make( tag, *args, &block )
             end
 
             nil
@@ -325,6 +355,8 @@ end # Scaffold
 
 
 if $0 == __FILE__ then
+   require "baseline"
+   
    b = Scaffold::Presentation::Renderers::HTML5.new(true)
    b.html do
       head do 
@@ -335,13 +367,14 @@ if $0 == __FILE__ then
       body do
          p.test.class1.some_id! "This is just a & test." 
          ul do
+            li "No ID"
             li.option1! "Option 1"
-            li.option2!("data-value" => "twenty & three"){ text! "Option 2" }
+            li.option2!("data-value" => "twenty & three"){ text "Option 2" }
             li.option3! "Option 3"
          end
-         comment! "The next p should be empty."
+         comment "The next p should be empty."
          p
-         p { raw! "&nbsp;" }
+         p { raw "&nbsp;" }
       end
    end
 
