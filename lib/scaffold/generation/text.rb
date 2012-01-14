@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby -KU
 # =============================================================================================
 # Scaffold
-# A simplified, CMS-like website development environment, built on Schemaform.
+# A simple, CMS-like development framework for content-based web sites.
 #
 # [Website]   http://schemaform.org/scaffold
 # [Copyright] Copyright 2011 Chris Poirier
@@ -18,30 +18,32 @@
 #             limitations under the License.
 # =============================================================================================
 
+require "scaffold"
+require Scaffold.locate("builder.rb")
 
-require "baseline"
+
+#
+# A simple builder for JSON.
 
 module Scaffold
-   QualityAssurance = Baseline::QualityAssurance
-   @@locator        = Baseline::ComponentLocator.new(__FILE__, 2)
+module Generation
+class Text < Builder
    
-   
-   #
-   # Finds components within the Scaffold library.
-   
-   def self.locate( path, allow_from_root = true )
-      @@locator.locate( path, allow_from_root )
+   def self.mime_type()
+      "text/plain"
    end
+   
+   def initialize( stream = [], parameters = {}, &filler )
+      super(stream, parameters, &filler)
+   end
+   
+   def puts( string )
+      write(string)
+      write("\n")
+   end
+   
 
-
+end # Text
+end # Generation
 end # Scaffold
-
-
-[".", "*"].each do |directory|
-   Dir[Scaffold.locate("scaffold/#{directory}/*.rb")].each do |path| 
-      next if path =~ /presentation/
-      require path
-   end
-end
-
 

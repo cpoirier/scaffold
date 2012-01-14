@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby -KU
 # =============================================================================================
 # Scaffold
-# A simplified, CMS-like website development environment, built on Schemaform.
+# A simple, CMS-like development framework for content-based web sites.
 #
 # [Website]   http://schemaform.org/scaffold
 # [Copyright] Copyright 2011 Chris Poirier
@@ -18,30 +18,40 @@
 #             limitations under the License.
 # =============================================================================================
 
+require "scaffold"
 
-require "baseline"
+
+#
+# The base class for things that assemble content for output. Each Node will have one or
+# more Views.
 
 module Scaffold
-   QualityAssurance = Baseline::QualityAssurance
-   @@locator        = Baseline::ComponentLocator.new(__FILE__, 2)
+class View
+
+   def initialize( node, &definer )
+      @node     = node
+      @renderer = nil
+      instance_eval(&definer) if definer
+   end
+
+   
+   #
+   # Defines your render() handling. Your block will be passed a State and a Route
+   # and you should fill in the reply.
+   
+   def on_render( &block )
+      @renderer = block
+   end
    
    
    #
-   # Finds components within the Scaffold library.
+   # Renders the View (by calling your on_render handler).
    
-   def self.locate( path, allow_from_root = true )
-      @@locator.locate( path, allow_from_root )
+   def render( state, route )
+      return @renderer.call(state, route)
+      fail "you must provide a renderer (via on_render) or define at least one View"
    end
-
-
+   
+   
+end # View
 end # Scaffold
-
-
-[".", "*"].each do |directory|
-   Dir[Scaffold.locate("scaffold/#{directory}/*.rb")].each do |path| 
-      next if path =~ /presentation/
-      require path
-   end
-end
-
-

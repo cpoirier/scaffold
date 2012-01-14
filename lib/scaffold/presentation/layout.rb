@@ -54,24 +54,24 @@ class Layout
    end
    
    def before_render( proc = nil, &block )
-      if handler = proc || block then
-         @before_render = handler
+      if node = proc || block then
+         @before_render = node
       else
          @before_render
       end
    end
    
    def on_render( proc = nil, &block )
-      if handler = proc || block then 
-         @on_render = handler
+      if node = proc || block then 
+         @on_render = node
       else
          @on_render
       end
    end
    
    def after_render( proc = nil, &block )
-      if handler = proc || block then
-         @after_render = handler
+      if node = proc || block then
+         @after_render = node
       else
          @after_render
       end

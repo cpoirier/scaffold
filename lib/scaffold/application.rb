@@ -19,7 +19,7 @@
 # =============================================================================================
 
 require "scaffold"
-require Scaffold.locate("handler.rb")
+require Scaffold.locate("node.rb")
 require Scaffold.locate("harness/rack.rb")
 
 
@@ -28,7 +28,7 @@ require Scaffold.locate("harness/rack.rb")
 # these in your system. Pass this object to Rack as an application and it will run.
 
 module Scaffold
-class Application < Handler
+class Application < Node
 
    attr_reader :strings, :properties, :defaults, :configuration, :name_cache, :user_agent_database, :supported_languages
    
@@ -41,8 +41,8 @@ class Application < Handler
    #
    # +supported_languages+: a list of languages your application supports (ie. en, fr, etc.)
    # 
-   # +default_handler+: for simple applications, an alternative to defining the on_request
-   # handler; your +default_handler+ will be asked to route the request, and the result will
+   # +default_node+: for simple applications, an alternative to defining the on_request
+   # node; your +default_node+ will be asked to route the request, and the result will
    # be rendered; this is most appropriate for simple-purpose sites (like blogs)
    #  
    # +properties+: name/value pairs that override any user-supplied data
@@ -61,7 +61,7 @@ class Application < Handler
       @defaults            = configuration.fetch(:defaults  , {})
       @supported_languages = configuration.fetch(:supported_languages, ["en"])
       @user_agent_database = configuration.fetch(:user_agent_database){ Tools::UserAgentDatabase.build_from_user_agents_dot_org() }
-      @not_found_handler   = Handler.new(self, nil, true)
+      @not_found_node   = Node.new(self, nil, true)
       @processor           = nil      
       @name_cache          = nil
       
@@ -71,6 +71,39 @@ class Application < Handler
       
       super(self, &definer)
    end
+   
+   
+   #
+   # Defines the event node for the main process() loop. Your block will be passed a 
+   # Harness::State with all the request information, and you must complete it before you
+   # return it. How you process the request is up to you: you can directly generate the 
+   # content (for simple sites), use the routing system to pick an appropriate Node, or
+   # implement a system of your own imaging. As a convenience, your block can return a Route
+   # instead of the State, and it will be completed and rendered for you.
+   
+   def on_process(&block)
+      @processor = block
+   end
+
+
+   #
+   # The master entry point for all Application activity: processes a request and fills in 
+   # the response (all from/to the State). Standard processing is to route the request 
+   # and render the result. Calls your on_process() proc instead, if applicable.
+   
+   def process( state )
+      result = @processor ? @processor.call(state) : route(state)
+
+      if result.is_a?(Harness::Route) then
+         result = (route = result).complete(state).render(state)
+      else
+         result = state
+      end
+      
+      assert(result.complete?, "processing did not complete the state")
+      
+      result
+   end   
    
 
    #
@@ -82,10 +115,12 @@ class Application < Handler
       state   = Harness::State.build(self, request)
       result  = process(state)     
 
-      if result.response.is_a?(Proc) then
-         Rack::Response.new(nil, result.status, result.headers).finish(&result.response)
-      else
-         Rack::Response.new(result.response, result.status, result.headers)
+      if result.response then
+         status  = result.status
+         headers = result.headers.update(:content_type => result.response.mime_type)
+         Rack::Response.new(nil, result.status, result.headers).finish do |stream|
+            result.response.write_to(stream)
+         end
       end
    end
    

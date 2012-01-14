@@ -42,20 +42,32 @@ class State
       new(application, URL.build(rack_request), :post => rack_request.POST, :cookies => rack_request.cookies, :language_preference => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), :user_agent => rack_request.env["HTTP_USER_AGENT"], :environment => rack_request.env)
    end
    
+   #
+   # A (read-only, please) set of request parameters, chosen with the following priority:
+   #   POST, GET, COOKIES.
+   #
+   # Any cookies you set using set_cookie() will also appear here, if appropriate.
+   
+   def parameters()
+      @parameters
+   end
+   
+   
    def initialize( application, url, properties = {} )
       properties[:application] = application
       properties[:url        ] = url
       properties[:get        ] = url.parameters
+      properties[:parameters ] = url.parameters.dup
       
-      @properties      = application.properties.update(properties)
-      @application     = application
-      @url             = url
-      @get_parameters  = url.parameters
-      @post_parameters = @properties.fetch(:post       , {}                   )
-      @cookies         = @properties.fetch(:cookies    , {}                   )
-      @environment     = @properties.fetch(:environment, {}                   )
-      @secure          = @properties.fetch(:secure     , url.scheme == "https")
-      @user_agent      = @properties.fetch(:user_agent , nil                  )
+      @properties         = application.properties.update(properties)
+      @application        = application
+      @url                = url
+      @get_parameters     = url.parameters
+      @post_parameters    = @properties.fetch(:post       , {}                   )
+      @cookies            = @properties.fetch(:cookies    , {}                   )
+      @environment        = @properties.fetch(:environment, {}                   )
+      @secure             = @properties.fetch(:secure     , url.scheme == "https")
+      @user_agent         = @properties.fetch(:user_agent , nil                  )
 
       @language = @properties.fetch(:language) do
          if @properties.member?(:language_preference) then
@@ -65,12 +77,11 @@ class State
          end
       end
 
-      @content_type = "text/html";
-      @status       = 200;
-      @response     = nil
-      @cookie_sets  = {}
-      @headers      = []
-      @route        = nil
+      @status      = 200;
+      @response    = nil
+      @cookie_sets = {}
+      @headers     = []
+      @route       = nil
       
       load_parameters()
    end
@@ -110,27 +121,29 @@ class State
 
 
    #
-   # Sets a response or response producer into the state. In the producer case, your block will
-   # be passed something to which you can append strings (<<). The output will be sent directly to 
-   # the client. Without a producer, the response will use memory until the response is sent.
+   # Sets a Content object as the response for this request. If you pass a block, it will be 
+   # called to produce the Content object. If you pass a Class and a block, the class, 
+   # parameters, and block will be passed directly to Content.build() for processing.
    #
-   # Note: you can pass the type in the first parameter if you are supplying a producer.
+   # Example:
+   #    state.set_response(Generation::HTML5) do
+   #       html do
+   #          # . . . 
+   #       end
+   #    end
    
-   def set_response( response = nil, type = "text/html", &producer )
-      if producer && response then
-         @content_type = response
-         @response     = producer
+   def set_response( content = nil, parameters = {}, &block )
+      if block then
+         if content.is_a?(Class) then
+            @response = Content.build(content, parameters, &block)
+         else
+            @response = yield
+         end
       else
-         @content_type = type
-         @response     = response
+         @response = content
       end
    end
 
-   def on_response( type = "text/html", &producer )
-      @content_type = type
-      @response     = producer
-   end
-   
    
    #
    # Sets a cookie into the state and client.
@@ -138,6 +151,10 @@ class State
    def set_cookie( name, value, expires_in = 0 )
       @cookies[name] = value
       @cookie_sets[name] = CookieSet.new(name, value, expires_in)
+      
+      unless @get_parameters.member?(name) or @post_parameters.member?(name)
+         @parameters[name] = value
+      end
    end
    
 
@@ -188,9 +205,9 @@ class State
 private
 
    def load_parameters()
-      [@post_parameters, @get_parameters].each do |set|
+      [@post_parameters, @get_parameters, @cookies].each do |set|
          set.each do |key, value|
-            @properties[key] = value unless @properties.member?(key)
+            @parameters[key] = value unless @parameters.member?(key)
          end
       end
    end

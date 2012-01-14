@@ -104,16 +104,16 @@ class Layout < HTML5
    
    def render!()
       unless @rendered
-         if handler = @definition.before_render then
-            instance_eval(&handler)
+         if node = @definition.before_render then
+            instance_eval(&node)
          end
          
-         if handler = @definition.on_render then
-            instance_eval(&handler)
+         if node = @definition.on_render then
+            instance_eval(&node)
          end
          
-         if handler = @definition.after_render then
-            instance_eval(&handler)
+         if node = @definition.after_render then
+            instance_eval(&node)
          end
 
          @rendered = true

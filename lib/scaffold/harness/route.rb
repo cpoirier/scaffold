@@ -20,30 +20,30 @@
 
 
 #
-# Captures a step in the routing of a request to the Handler responsible for its processing.
+# Captures a step in the routing of a request to the Node responsible for its processing.
 
 module Scaffold
 module Harness
 class Route
       
-   attr_reader :parent, :name, :handler, :path, :unresolved, :status, :redirect
+   attr_reader :parent, :name, :node, :path, :unresolved, :status, :redirect
 
-   def initialize( parent, name, handler, unresolved, terminal = false )
+   def initialize( parent, name, node, unresolved, terminal = false )
       @parent     = parent
       @name       = name
       @path       = @parent ? @parent.path + name : Path.new(name)
-      @handler    = handler
+      @node    = node
       @unresolved = Path.build(unresolved)
       
       @complete   = false
       @redirect   = nil
    
-      if terminal || @handler.routing_sink? then
+      if terminal || @node.routing_sink? then
          @complete = true
       elsif @unresolved.empty? then
          @complete = true
-         if @unresolved.directory? ^ @handler.container? then
-            @location = @handler.container? ? @path.to_directory() : @path.to_file()
+         if @unresolved.directory? ^ @node.container? then
+            @location = @node.container? ? @path.to_directory() : @path.to_file()
          end
       end
    end
@@ -53,7 +53,7 @@ class Route
    end
    
    def application()
-      @handler.application
+      @node.application
    end
    
    def url( base, relative_application = true )
@@ -61,13 +61,13 @@ class Route
    end
 
    #
-   # Retrieves the primary or an adjunct handler for this route.
+   # Retrieves the primary or an handler node for this route.
    
-   def handler( purpose = nil )
+   def node( purpose = nil )
       if purpose.nil? then
-         @handler
+         @node
       else
-         @handler.adjunct_for(purpose) || (@parent ? @parent.handler(purpose) : @handler.application.adjunct_for(purpose))
+         @node.handler_for(purpose) || (@parent ? @parent.node(purpose) : @node.application.handler_for(purpose))
       end
    end
    
@@ -81,16 +81,16 @@ class Route
       name = @unresolved.first
       rest = @unresolved.rest
    
-      if @handler.container? then
-         if handler = @handler.resolve(name, self, state) then
-            return self.new(self, name, handler, rest)
+      if @node.container? then
+         if node = @node.resolve(name, self, state) then
+            return self.new(self, name, node, rest)
          end
       end
       
-      if handler = handler(:not_found) then
-         return self.new(self, name, handler, rest, true)
+      if node = node(:not_found) then
+         return self.new(self, name, node, rest, true)
       else
-         fail "something in your application must define a handler for paths not found"
+         fail "something in your application must define a node for paths not found"
       end
    end
 
