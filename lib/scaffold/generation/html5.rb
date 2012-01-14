@@ -18,53 +18,65 @@
 #             limitations under the License.
 # =============================================================================================
 
+require "scaffold"
+require Scaffold.locate("builder.rb")
+
+
 #
-# A Markaby-like builder for HTML5 that doesn't assume the underlying language is XML. It explictly
-# avoids validating the HTML, as the spec for HTML5 is still evolving and may change at any time.
-# You should therefore know what you are doing, and periodically validate your output using the 
-# W3C validator.
+# A Markaby-like builder for HTML5 that doesn't assume the underlying language is XML. It 
+# explictly avoids validating the HTML, as the spec for HTML5 is still evolving and may change 
+# at any time. You should therefore know what you are doing, and periodically validate your 
+# output using the W3C validator.
 #
-# The system is intended for use in a plugin-based system, where errors may not be easily predicted 
-# nor fixed; as a result, ID collisions are recorded but not fatal, and you can query to find out
-# if there has been a problem. The class keeps Markaby's clean CSS handling.
+# The system is intended for use in a plugin-based system, where errors may not be easily 
+# predicted nor fixed; as a result, ID collisions are recorded but not fatal, and you can query 
+# to find out if there has been a problem. The class keeps Markaby's clean CSS handling.
 # 
 # Example:
-#    b = Scaffold::Presentation::Renderers::HTML5.new(true)
-#    b.html do
-#       head do 
-#          meta :charset => "UTF-8"
-#          title "Hello, world"
-#       end
-#    
-#       body do
-#          p.test.class1.some_id! "This is just a & test." 
-#          ul do
-#             li "No ID"
-#             li.option1! "Option 1"
-#             li.option2!("data-value" => "twenty & three"){ text "Option 2" }
-#             li.option3! "Option 3"
+#    b = Scaffold::Generation::HTML5.new() do
+#       html do
+#          head do 
+#             meta :charset => "UTF-8"
+#             title "Hello, world"
 #          end
-#          comment "The next p should be empty."
-#          p
-#          p { raw "&nbsp;" }
+#          
+#          body do
+#             p.test.class1.some_id! "This is just a & test." 
+#             ul do
+#                li "No ID"
+#                li.option1! "Option 1"
+#                li.option2!("data-value" => "twenty & three"){ text "Option 2" }
+#                li.option3! "Option 3"
+#             end
+#             comment "The next p should be empty."
+#             p
+#             p { raw "&nbsp;" }
+#          end
 #       end
 #    end
+#
+#    puts b.to_s
+#
 
 module Scaffold
-module Presentation
-module Renderers
-class HTML5
+module Generation
+class HTML5 < Builder
    
-   def initialize( pretty_print = false, stream = [], &block )
-      @stream        = []
-      @real_stream   = stream
-      @pretty_print  = pretty_print
-      @indent        = 0
+   def self.mime_type()
+      "text/html"
+   end
+   
+      
+   def initialize( stream = [], parameters = {}, &block )
+      @buffer        = []
+      @pretty_print  = parameters.fetch(:pretty_print, false)
+      @indent        = parameters.fetch(:indent, 0)
       @serial        = 0
       @ids           = {}
       @duplicate_ids = {}
-      
-      capture(&block) unless block.nil?
+
+      super(stream, parameters, &block)
+      flush
    end
 
 
@@ -72,8 +84,8 @@ class HTML5
    # Starts an HTML stream.
    
    def html( language = "en", attrs = {}, &block )
-      @stream << "<!DOCTYPE html>"
-      @stream << "\n" if @pretty_print
+      @buffer << "<!DOCTYPE html>"
+      @buffer << "\n" if @pretty_print
       make( :html, {:lang => language}.update(attrs), &block )
       flush
    end
@@ -83,7 +95,7 @@ class HTML5
    # Outputs raw text to the stream.
    
    def raw( text )
-      @stream << text
+      @buffer << text
    end
 
    
@@ -91,7 +103,7 @@ class HTML5
    # Outputs encoded text to the stream.
    
    def text( text )
-      @stream << encode(text.to_s)
+      @buffer << encode(text.to_s)
    end
    
    
@@ -102,61 +114,44 @@ class HTML5
       make_indent if @indent > 0
       
       @serial = @serial + 1
-      @stream << "<!-- "
+      @buffer << "<!-- "
       
       if text then 
-         @stream << encode(text)
+         @buffer << encode(text)
       elsif !block.nil? then
          capture(&block)
       end
       
-      @stream << " -->"
+      @buffer << " -->"
    end
       
 
    # ==========================================================================================
 
-
-   #
-   # Returns the stream object.
    
-   def to_stream()
+   def write( object )
       flush
-      @real_stream
+
+      if object.responds_to?(:mime_type) && object.responds_to?(:write_to) then
+         case object.mime_type
+         when "text/html"
+            object.write_to(@stream, :pretty_print => @pretty_print, :indent => @indent)
+         else
+            make(:div, :class => object.mime_type.gsub("/", "__")) do
+               object.write_to(self, :pretty_print => true)
+            end
+         end
+      else
+         write!(encode(object.to_s))
+      end
    end
-   
-   
+
    #
    # Returns the stream as a string, if possible. Returns nil if the stream isn't buffered.
    
    def to_s()
       flush
-      @real_stream.is_an?(Array) ? @real_stream.join() : nil
-   end
-
-
-   #
-   # Allows you to reuse the renderer with the same or another stream.
-   
-   def reset( new_stream = nil )
-      if new_stream then
-         @real_stream = new_stream
-      else
-         @real_stream.clear()
-      end 
-      
-      @ids.clear()
-      @duplicate_ids.clear()
-      @serial = 0
-      @indent = 0
-   end
-   
-   
-   #
-   # Runs your block as a DSL against this renderer.
-   
-   def capture(&block)
-      instance_eval(&block)
+      @stream.is_an?(Array) ? @stream.join() : nil
    end
 
 
@@ -171,7 +166,7 @@ class HTML5
       # special syntax for the latter case, we will immediately add the empty tag, then let CSSProxy
       # undo the empty tag and replace it, should it be used.
       
-      result = args.empty? && block.nil? ? CSSProxy.new(self, symbol, @stream.length, @indent, @serial) : nil
+      result = args.empty? && block.nil? ? CSSProxy.new(self, symbol, @buffer.length, @indent, @serial) : nil
       make(symbol, *args, &block)
       result
    end
@@ -186,7 +181,7 @@ class HTML5
    WELL_KNOWN_TAGS.each do |name|
       class_eval <<-CODE, __FILE__, __LINE__
          def #{name}(*args, &block)
-            result = args.empty? && block.nil? ? CSSProxy.new(self, #{name.inspect}, @stream.length, @indent, @serial) : nil
+            result = args.empty? && block.nil? ? CSSProxy.new(self, #{name.inspect}, @buffer.length, @indent, @serial) : nil
             make(#{name.inspect}, *args, &block)
             result
          end
@@ -200,8 +195,8 @@ protected
       make_indent if @indent > 0
      
       serial = @serial = @serial + 1
-      @stream << "<"
-      @stream << symbol.to_s
+      @buffer << "<"
+      @buffer << symbol.to_s
 
       body = []
       args.each do |arg|
@@ -234,12 +229,12 @@ protected
       end
 
       if SELF_CLOSING_TAGS.member?(symbol) then
-         @stream << " />"
+         @buffer << " />"
       else
-         @stream << ">"
+         @buffer << ">"
 
          @indent += 1 if @pretty_print
-         @stream.concat( body )
+         @buffer.concat( body )
          capture(&block) unless block.nil?
       
          if @pretty_print then
@@ -247,31 +242,31 @@ protected
             make_indent if serial != @serial
          end
 
-         @stream << "</"
-         @stream << symbol.to_s
-         @stream << ">"
+         @buffer << "</"
+         @buffer << symbol.to_s
+         @buffer << ">"
       end
       
       nil
    end
    
    def make_indent()
-      @stream << "\n"
-      @stream << " " * @indent * 2
+      @buffer << "\n"
+      @buffer << " " * @indent * 2
    end
    
    def make_attribute( name, value )
-      @stream << " "
-      @stream << name.to_s
-      @stream << "=\""
+      @buffer << " "
+      @buffer << name.to_s
+      @buffer << "=\""
       
       if value.is_a?(Array) then
-         @stream << value.collect{|i| i.to_s}.join(" ")
+         @buffer << value.collect{|i| i.to_s}.join(" ")
       else
-         @stream << encode(value)
+         @buffer << encode(value)
       end
       
-      @stream << "\""
+      @buffer << "\""
    end
    
    def encode( raw )
@@ -279,9 +274,12 @@ protected
    end
 
    def flush()
-      unless @stream.empty?
-         @real_stream.concat @stream
-         @stream.clear()
+      unless @buffer.empty?
+         @buffer.each do |string|
+            write!(string)
+         end
+         
+         @buffer.clear()
       end
    end
    
@@ -336,7 +334,7 @@ protected
             serial = @serial  
             
             @builder.instance_eval do
-               @stream.clear()
+               @buffer.clear()
                @indent = indent
                @serial = serial 
                
@@ -349,35 +347,31 @@ protected
    end
    
 end # HTML5
-end # Renderers
-end # Presentation
+end # Generation
 end # Scaffold
 
 
 if $0 == __FILE__ then
-   require "baseline"
-   
-   b = Scaffold::Presentation::Renderers::HTML5.new(true)
-   b.html do
-      head do 
-         meta :charset => "UTF-8"
-         title "Hello, world"
-      end
-
-      body do
-         p.test.class1.some_id! "This is just a & test." 
-         ul do
-            li "No ID"
-            li.option1! "Option 1"
-            li.option2!("data-value" => "twenty & three"){ text "Option 2" }
-            li.option3! "Option 3"
+   Scaffold::Generation::HTML5.new(STDOUT, :pretty_print => true) do
+      html do
+         head do 
+            meta :charset => "UTF-8"
+            title "Hello, world"
          end
-         comment "The next p should be empty."
-         p
-         p { raw "&nbsp;" }
+         
+         body do
+            p.test.class1.some_id! "This is just a & test." 
+            ul do
+               li "No ID"
+               li.option1! "Option 1"
+               li.option2!("data-value" => "twenty & three"){ text "Option 2" }
+               li.option3! "Option 3"
+            end
+            comment "The next p should be empty."
+            p
+            p { raw "&nbsp;" }
+         end
       end
    end
-
-   puts b.to_s
 end
 

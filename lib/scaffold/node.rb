@@ -18,24 +18,27 @@
 #             limitations under the License.
 # =============================================================================================
 
+require "scaffold"
+
 
 #
-# The fundamental URL handler in the system.
+# The fundamental URL node in the system.
 
 module Scaffold
-class Handler
+class Node
    
    include Baseline::QualityAssurance
    extend  Baseline::QualityAssurance
 
    #
-   # If you'd rather not subclass, you can fill in the Handler by passing a block to call
-   # the private definer methods (your block will be instance_eval'd).
+   # If you'd rather not subclass, you can fill in the Node by passing a block to call
+   # the various event definers (your block will be instance_eval'd).
    
    def initialize( application, is_container = true, is_routing_sink = false, &definer )
       @application     = application
       @is_container    = is_container
       @is_routing_sink = is_routing_sink
+      @views           = {}
       instance_eval(&definer) if definer
    end
    
@@ -47,46 +50,49 @@ class Handler
       @is_routing_sink
    end
 
+   #
+   # Defines a View for the Node. Your block will be passed to the View for DSL processing.
+   # Note, if you use a Symbol name, a String version will automatically be registered for
+   # you.
+   
+   def on_view( name, &definer )
+      @views[name] = View.new(&definer)
+      if name.is_a?(Symbol) then
+         @views[name.to_s] = @views[name]
+      end
+   end
+   
+   #
+   # Defines your resolution processing. Your block will receive the name to resolve, the
+   # context Route (if applicable), and the container URL.
+   
    def on_resolve(&block)
       @resolver = block
    end
-   
-   
-   #
-   # Defines the event handler for the main process() loop. Your block will be passed a 
-   # Harness::State with all the request information, and you must complete it before you
-   # return it. How you process the request is up to you: you can directly generate the 
-   # content (for simple sites), use the routing system to pick an appropriate Handler, or
-   # implement a system of your own imaging. As a convenience, your block can return a Route
-   # instead of the State, and it will be completed and rendered for you.
-   
-   def on_process(&block)
-      @processor = block
-   end
 
 
    #
-   # The master entry point for all handler activity: processes a request and fills in the response 
-   # (all from/to the State). Standard processing is to route the request (with this handler as root) 
-   # and render the result. Calls your on_process() proc instead, if applicable.
+   # Renders the node content to the State. If the request includes a "view" parameter that
+   # matches one of ours (as a String) it will be used. If not and you have provided
+   # an on_render handler, it will be used next. If not, and you have defined any views
+   # at all, the first will be used (not: only Ruby 1.9+ tracks Hash order). If you 
+   # haven't supplied any of these options, the routine will fail().
    
-   def process( state )
-      result = @processor ? @processor.call(state) : route(state)
-
-      if result.is_a?(Harness::Route) then
-         result = (route = result).complete(state).render(state)
+   def render( state, route = nil )
+      if state.properties.member?("view") && @views.member?(state.properties["view"]) then
+         @views[state.properties["view"]].render(state, route)
+      elsif defined?(@renderer) then
+         @renderer.call(state, route)
+      elsif !@views.empty? then
+         @views.first.render(state, route)
       else
-         result = state
+         fail "you must provide a renderer (via on_render) or define at least one View"
       end
-      
-      assert(result.complete?, "processing did not complete the state")
-      
-      result
-   end   
+   end
    
    
    #
-   # Routes the specified URL from this handler to the handler that is being addressed.
+   # Routes the specified URL from this node to the node that is being addressed.
    # Note that passing a state is optional. The URL contains the GET parameters already,
    # so if you can route based solely on that, the completed route will be easily
    # cacheable. If you use the state, things get more sticky.
@@ -98,7 +104,7 @@ class Handler
    
       
    #
-   # Returns a handler for the given name, or nil, if this handler doesn't recognize the name. 
+   # Returns a node for the given name, or nil, if this node doesn't recognize the name. 
    # Name resolution should depend only on the visible URL. Considerations of session, post 
    # parameters, cookies, etc., should be kept for processing.
    
@@ -108,8 +114,8 @@ class Handler
       container_url = context_route.url(state.url)
       if @application.name_cache then
          @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
-            if handler = @resolver.call(name, context_route, container_url) then
-               [handler, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
+            if node = @resolver.call(name, context_route, container_url) then
+               [node, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
             else
                [nil, 0]
             end
@@ -121,29 +127,30 @@ class Handler
 
 
    #
-   # Adds an adjunct (secondary or peripheral) handler to this one for a particular purpose.
+   # Adds an handler (secondary or peripheral) node to this one for a particular purpose.
    # You may never need to use this routine, but it's the way the routing system finds a 
-   # handler for not found conditions (the purpose code for that is :not_found). Note 
-   # that the routing system (Route.handler()) searches for its adjuncts along the route, with 
+   # node for not found conditions (the purpose code for that is :not_found). Note 
+   # that the routing system (Route.node()) searches for its handlers along the route, with 
    # fall back to the Application. As such, barring special needs, you may be able to install
-   # all your adjuncts (access denied is another good example) at the Application level.
+   # all your handlers (access denied is another good example) at the Application level.
    
-   def define_adjunct( purpose, handler )
-      @adjuncts = {} unless defined?(@adjuncts)
-      @adjuncts[purpose] = handler
+   def define_handler( purpose, node )
+      @handlers = {} unless defined?(@handlers)
+      @handlers[purpose] = node
    end
      
    #
-   # Retrieves the defined adjunct for the named purpose. See define_adjunct() for a 
+   # Retrieves the defined handler for the named purpose. See define_handler() for a 
    # discussion.
    
-   def adjunct_for( purpose )
-      return nil unless defined?(@adjuncts)
-      @adjuncts[purpose]
+   def handler_for( purpose )
+      return nil unless defined?(@handlers)
+      @handlers[purpose]
    end
    
    
    
    
-end # Handler
+   
+end # Node
 end # Scaffold
