@@ -44,3 +44,20 @@ end # Scaffold
 end
 
 
+if $0 == __FILE__ then
+   Scaffold::Application.new("Example") do
+      on_process do |state|
+         state.set_response(Scaffold::Generation::HTML5) do
+            html do
+               head do
+                  title "Example & Fun"
+               end
+               body do
+                  p "Welcome"
+               end
+            end
+         end
+      end
+   end.start()
+end
+
