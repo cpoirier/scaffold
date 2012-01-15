@@ -60,7 +60,12 @@ module Rack
       end
       
       alias append concat
-
+   end
+   
+   class BodyProxy
+      def each(&block)
+         @body.each(&block)
+      end
    end
 end
 

@@ -81,7 +81,7 @@ class Content
    
    def write_to( stream, parameters = {} )
       @strings.each do |string|
-         stream.write(string)
+         stream << string
       end
       
       @writer.call(stream, parameters) if @writer

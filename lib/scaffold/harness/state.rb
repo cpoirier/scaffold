@@ -31,6 +31,9 @@ module Scaffold
 module Harness
 class State
    
+   include Baseline::QualityAssurance
+   extend  Baseline::QualityAssurance
+   
    SOURCE_INTERNAL    = 6
    SOURCE_DIRECT      = 5
    SOURCE_APPLICATION = 4
@@ -39,9 +42,27 @@ class State
    SOURCE_COOKIE      = 1
    SOURCE_DEFAULTS    = 0
    
+   HTTP_OKAY = 200
+   
+   ILLEGAL_COOKIE_CHARACTERS = /[",;\\\s\n\r\t]/
+   
    def self.build( application, rack_request )
       new(application, URL.build(rack_request), "request.post" => rack_request.POST, "request.cookies" => rack_request.cookies, "request.language_preference" => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), "request.user_agent" => rack_request.env["HTTP_USER_AGENT"], "rack.environment" => rack_request.env)
    end
+   
+   #
+   # Well-known properties include:
+   #    scaffold.application => the application
+   #    scaffold.route       => the chosen route, if provided
+   #    request.url          => the requested URL object
+   #    request.get          => the GET parameters (if any)
+   #    request.secure       => if true, the connection is secure
+   #    response.status      => the HTTP response code
+   #    response.content     => the Content object to return
+   #    response.headers     => the raw headers you've set (not including cookies and other special stuff)
+   #    cookie.domain        => the default cookie domain
+   #    cookie.path          => the default cookie path
+   #    cookie.secure        => the default cookie secure status
    
    def initialize( application, url, properties = {} )
       @application = application
@@ -52,21 +73,21 @@ class State
       #
       # Load in the data.
       
-      self["scaffold.application", SOURCE_INTERNAL] = application
-      self["scaffold.route"      , SOURCE_INTERNAL] = nil;
-      self["request.url"         , SOURCE_INTERNAL] = url
-      self["request.get"         , SOURCE_INTERNAL] = url.parameters
-      self["request.secure"      , SOURCE_INTERNAL] = !!properties.fetch("request.secure", url.scheme == "https")
-      self["response.status"     , SOURCE_INTERNAL] = 0;
-      self["response.content"    , SOURCE_INTERNAL] = nil;
-      self["response.headers"    , SOURCE_INTERNAL] = [];
-
       load(properties                   , SOURCE_DIRECT     )
       load(@application.properties      , SOURCE_APPLICATION)
       load(properties["request.post"]   , SOURCE_POST       )
       load(url.parameters               , SOURCE_GET        )
       load(properties["request.cookies"], SOURCE_COOKIE     )
       load(@application.defaults        , SOURCE_DEFAULTS   )
+
+      self["scaffold.application", SOURCE_INTERNAL] = application
+      self["request.url"         , SOURCE_DIRECT  ] = url
+      self["request.get"         , SOURCE_DIRECT  ] = url.parameters
+      self["request.secure"      , SOURCE_DIRECT  ] = !!properties.fetch("request.secure", url.scheme == "https")
+      self["scaffold.route"      , SOURCE_DIRECT  ] = nil
+      self["response.status"     , SOURCE_DIRECT  ] = HTTP_OKAY
+      self["response.content"    , SOURCE_DIRECT  ] = nil
+      self["response.headers"    , SOURCE_DIRECT  ] = {}
 
       self["request.language", SOURCE_INTERNAL] = fetch("request.language") do 
          if @properties.member?("request.language_preference") then
@@ -84,10 +105,20 @@ class State
    def route      ; self["scaffold.route"    ] ; end
    def status     ; self["response.status"   ] ; end
    def response   ; self["response.content"  ] ; end
+   def secure?    ; !!self["request.secure"  ] ; end
    
-   def secure?    ; return !!self["request.secure"]    ; end
-   def complete?  ; return self["response.status"] > 0 ; end
+   def complete?()
+      self["response.status"] != HTTP_OKAY || self["response.content"].exists?
+   end
 
+   def status=( value )
+      self["response.status"] = value
+   end
+   
+   def route=( route )
+      self["scaffold.route"] = route
+   end
+   
 
    #
    # Returns true if the name is defined in the State.
@@ -103,7 +134,7 @@ class State
    # Gets a property from the state, returning nil if not present.
    
    def []( name )
-      @properties.fetch(name.to_s, default)
+      @properties.fetch(name.to_s, nil)
    end
    
    
@@ -111,9 +142,9 @@ class State
    # Sets a property into the state. Ensures source weights are respected.
    
    def []=( *args )
-      name   = name.shift.to_s
-      value  = rest.pop
-      source = rest.empty? ? SOURCE_DIRECT : (0 + rest.shift)
+      name   = args.shift.to_s
+      value  = args.pop
+      source = args.empty? ? SOURCE_DIRECT : (0 + args.shift)
             
       if !@properties.member?(name) || @weights[name] <= source then
          @properties[name] = value
@@ -127,7 +158,11 @@ class State
    # supply a block to generate the default.
    
    def fetch( name, default = nil, &block )
-      @properties.fetch(name.to_s, default, &block)
+      if block then
+         @properties.fetch(name.to_s, &block)
+      else
+         @properties.fetch(name.to_s, default)
+      end
    end
    
 
@@ -144,24 +179,42 @@ class State
    #    end
    
    def set_response( content = nil, parameters = {}, &block )
-      if block then
+      self["response.content"] = if block then
          if content.is_a?(Class) then
-            self["response.content"] = Content.build(content, parameters, &block)
+            Content.build(content, parameters, &block)
          else
-            self["response.content"] = yield
+            yield
          end
       else
-         self["response.content"] = content
+         content
       end
    end
 
    
    #
-   # Sets a cookie into the state and client.
-
-   def set_cookie( name, value, expires_in = 0 )
+   # Sets a cookie into the state and client. Properties can include:
+   #
+   # :max_age => 0 for delete or a positive integer for a longer lifespan (nil for end of session)
+   # :domain  => the domain to which the cookie applies ("myhost.com", "www.myhost.com", ".myhost.com")
+   # :path    => the path to which the cookie applies
+   # :secure  => if true, Secure and HttpOnly will be sent with the cookie, preventing JavaScript access
+   #
+   # Note: defaults for :domain, :path, and :secure are drawn from cookie.domain, cookie.path, and 
+   # cookie.secure, if present in the State.
+   
+   def set_cookie( name, value, properties = {} )
+      check do
+         if value =~ ILLEGAL_COOKIE_CHARACTERS then
+            fail "you cannot use a comma, semi-colon, backslash, double quotes, or whitespace in a cookie value"
+         end
+      end
+      
+      properties[:domain] = self["cookie.domain"] if !properties.member?(:domain) && member?("cookie.domain")
+      properties[:path  ] = self["cookie.path"  ] if !properties.member?(:path  ) && member?("cookie.path"  )
+      properties[:secure] = self["cookie.secure"] if !properties.member?(:secure) && member?("cookie.secure")
+      
       self[name, SOURCE_COOKIE] = value
-      @cookie_sets[name] = CookieSet.new(name, value, expires_in)
+      @cookie_sets[name] = CookieSet.new(name, value, properties)
    end
    
 
@@ -169,7 +222,7 @@ class State
    # Unsets a cookie from the state and client.
    
    def unset_cookie( name )
-      @cookie_sets[name] = CookieSet.new(name, "", -1)
+      @cookie_sets[name] = CookieSet.new(name, "", :max_age => 0)
       
       if @properties.member?(name) && @weights[name] == SOURCE_COOKIE then
          if @application.defaults.member?(name) then
@@ -183,18 +236,10 @@ class State
    
    
    #
-   # Returns a list of response headers.
-   
-   def response_headers()
-      fail_todo "merge cookie sets with stated headers"
-   end
-
-   
-   #
    # Adds a header to the response.
    
-   def add_header( name, value )
-      @headers << "#{name}: #{value}"
+   def set_header( name, value )
+      @headers[name] = value
    end
 
 
@@ -204,6 +249,42 @@ class State
    def reset_headers()
       @headers.clear
    end
+   
+
+   #
+   # Returns a list of response headers.
+   
+   def headers()
+      headers = self["response.headers"]
+      if self["response.content"] then
+         headers["Content-Type"] = self["response.content"].mime_type
+      else
+         headers.delete("Content-Type")
+      end
+      
+      unless @cookie_sets.empty? 
+         warn_once("using max-age instead of expires on set-cookies means all cookies are session-only in most (all?) versions of IE; should this be fixed?", "BUG")
+         
+         cookie_strings = []
+         @cookie_sets.each do |cookie_set|
+            cookie_string = "#{cookie_set.name}=#{cookie_set.value}"
+            
+            if properties = cookie_set.properties then
+               cookie_string += "; Max-Age=#{properties[:max_age]}" if properties[:max_age].exists?
+               cookie_string += "; HttpOnly; Secure"                if properties.member?(:secure)
+               cookie_string += "; Domain=#{properties[:domain]}"   if properties.member?(:domain)
+               cookie_string += "; Path=#{properties[:path]}"       if properties.member?(:path)
+            end
+            
+            cookie_strings << cookie_string
+         end
+         
+         headers["Set-Cookie"] = cookie_strings.join("\n")
+      end
+      
+      headers
+   end
+
    
    
    #
@@ -233,7 +314,7 @@ private
       end
    end
    
-   CookieSet = Struct.new(:name, :value, :expires_in)
+   CookieSet = Struct.new(:name, :value, :properties)
 
 end # State
 end # Harness

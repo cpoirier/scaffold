@@ -131,7 +131,7 @@ class Application < Node
       end
       
       assert(result.complete?, "processing did not complete the state")
-      @postprocessor.call(state) is @postprocessor
+      @postprocessor.call(state) if @postprocessor
       
       result
    end   
@@ -146,17 +146,60 @@ class Application < Node
       state   = Harness::State.build(self, request)
       result  = process(state)     
 
-      if result.response then
+      if result.complete? then
          status  = result.status
-         headers = result.headers.update(:content_type => result.response.mime_type)
-         Rack::Response.new(nil, result.status, result.headers).finish do |stream|
-            result.response.write_to(stream)
-         end
+         headers = result.headers
+         content = result.response
+         
+         body = []
+         content.write_to(body)
+         [status, headers, body]
+         # Rack::Response.new(nil, status, headers).finish do |stream|
+         #    content.write_to(stream)
+         # end
+      else
+         [500, {"Content-type" => "text/plain"}, ["Scaffold failed to produce a result. For obvious reasons, this should not happen."]]
       end
    end
    
    alias call process_request
 
+
+   #
+   # Launches the application with Rack, if you don't want to bother with an external 
+   # config.ru file. Any block you pass will be executed inside the Rack::Builder, so you
+   # can do whatever you need. The configuration hash allows you to control the basics:
+   #
+   # :root  => the path at which to map the application (defaults to /)
+   # :type  => the type of server to operate (cgi, fcgi, mongrel, webrick, etc.)
+   # :port  => the port of the server, if appropriate
+   # :host  => the host of the server, if appropriate
+   # :debug => clear to get an fcgi server by default
+       
+   def start( configuration = {}, &block )
+      this  = self
+      debug = !!configuration.fetch(:debug, true)
+      root  = configuration.fetch(:root, "/"        )
+      type  = configuration.fetch(:type, debug ? "webrick"   : "fcgi")
+      port  = configuration.fetch(:port, debug ? 8989        : nil   )
+      host  = configuration.fetch(:host, debug ? "localhost" : nil   )
+      
+      desc = Rack::Builder.new do
+         use Rack::CommonLogger
+         use Rack::ContentLength
+         if debug then
+            use Rack::ShowExceptions
+         end
+         
+         instance_eval(&block) if block
+
+         map root do
+           run this
+         end
+      end
+      
+      Rack::Server.start(:app => desc.to_app, :server => type, :Port => port, :Host => host)
+   end
 
    
 end # Application

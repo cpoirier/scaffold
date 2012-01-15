@@ -39,7 +39,6 @@ end # Scaffold
 
 [".", "*"].each do |directory|
    Dir[Scaffold.locate("scaffold/#{directory}/*.rb")].each do |path| 
-      next if path =~ /presentation/
       require path
    end
 end

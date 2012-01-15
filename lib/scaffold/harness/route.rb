@@ -32,7 +32,7 @@ class Route
       @parent     = parent
       @name       = name
       @path       = @parent ? @parent.path + name : Path.new(name)
-      @node    = node
+      @node       = node
       @unresolved = Path.build(unresolved)
       
       @complete   = false

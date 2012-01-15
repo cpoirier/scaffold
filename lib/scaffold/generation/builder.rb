@@ -49,10 +49,10 @@ class Builder
    # to_s otherwise.
 
    def write( object )
-      if object.responds_to?(:write) then
-         object.write(@stream)
+      if object.responds_to?(:write_to) then
+         object.write_to(@stream)
       else
-         @stream.write(object.to_s)
+         @stream << object.to_s
       end
    end
    
@@ -70,7 +70,7 @@ protected
    # Writes a string directly to the stream, without any filtering.
    
    def write!( string )
-      @stream.write(string)
+      @stream << string
    end
 
 end # Builder
