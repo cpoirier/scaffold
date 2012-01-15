@@ -61,8 +61,10 @@ class Application < Node
       @defaults            = configuration.fetch(:defaults  , {})
       @supported_languages = configuration.fetch(:supported_languages, ["en"])
       @user_agent_database = configuration.fetch(:user_agent_database){ Tools::UserAgentDatabase.build_from_user_agents_dot_org() }
-      @not_found_node   = Node.new(self, nil, true)
+      @not_found_node      = Node.new(self, nil, true)
       @processor           = nil      
+      @preprocessor        = nil
+      @postprocessor       = nil
       @name_cache          = nil
       
       if size = configuration.fetch(:name_cache_size, 0) then
@@ -71,18 +73,38 @@ class Application < Node
       
       super(self, &definer)
    end
-   
+
    
    #
-   # Defines the event node for the main process() loop. Your block will be passed a 
-   # Harness::State with all the request information, and you must complete it before you
-   # return it. How you process the request is up to you: you can directly generate the 
-   # content (for simple sites), use the routing system to pick an appropriate Node, or
+   # Defines an event handler you can use to preprocess the State when it is first received
+   # created, and before before it is processed. This is useful if you want to set some
+   # additional properties on the State before processing begins.
+   
+   def before_process( &block )
+      @preprocessor = block
+   end
+
+   
+   #
+   # Defines the event handler for the main process() work. Your block will be passed a 
+   # State with all the request information, and you must complete it before you return it. 
+   # How you process the request is up to you: you can directly generate the content and set
+   # a response (for simple sites), use the routing system to pick an appropriate Node, or
    # implement a system of your own imaging. As a convenience, your block can return a Route
    # instead of the State, and it will be completed and rendered for you.
    
-   def on_process(&block)
+   def on_process( &block )
       @processor = block
+   end
+   
+   
+   #
+   # Defines an event handler you can use to postprocess the State just before the response
+   # is returned to the client. This is useful if you want to do some caching or other similar
+   # work after processing is complete.
+   
+   def after_process( &block )
+      @postprocessor = block
    end
 
 
@@ -92,15 +114,24 @@ class Application < Node
    # and render the result. Calls your on_process() proc instead, if applicable.
    
    def process( state )
+      @preprocessor.call(state) if @preprocessor
       result = @processor ? @processor.call(state) : route(state)
 
       if result.is_a?(Harness::Route) then
-         result = (route = result).complete(state).render(state)
+         route = result.complete(state)
+         route.node.render(state, route)
+         
+         if state.complete? and state["skin"] != "none" then
+            route.each_context do |context|
+               context.node.skin(state, context)
+            end
+         end
       else
          result = state
       end
       
       assert(result.complete?, "processing did not complete the state")
+      @postprocessor.call(state) is @postprocessor
       
       result
    end   

@@ -106,6 +106,17 @@ class Route
       route
    end
    
+   #
+   # Calls your block once for each context of the route.
+   
+   def each_context()
+      current = @parent
+      while current
+         yield(current)
+         current = current.parent
+      end
+   end
+   
 end # Route
 end # Harness
 end # Scaffold
