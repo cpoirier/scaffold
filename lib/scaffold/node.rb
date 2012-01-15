@@ -39,6 +39,7 @@ class Node
       @is_container    = is_container
       @is_routing_sink = is_routing_sink
       @views           = {}
+      @skins           = {}
       instance_eval(&definer) if definer
    end
    
@@ -55,12 +56,26 @@ class Node
    # Note, if you use a Symbol name, a String version will automatically be registered for
    # you.
    
-   def on_view( name, &definer )
+   def on_view( name = "default", &definer )
       @views[name] = View.new(&definer)
       if name.is_a?(Symbol) then
          @views[name.to_s] = @views[name]
       end
    end
+   
+   
+   #
+   # Defines a View for skinning the node content. Skinning provides context to another
+   # Node's content. Your block will be passed to the View for DSL processing. Note, if 
+   # you use a Symbol name, a String version will automatically be registered for you.
+   
+   def on_skin( name = "default", &definer )
+      @skins[name] = View.new(&definer)
+      if name.is_a?(Symbol) then
+         @skins[name.to_s] = @skins[name]
+      end
+   end
+   
    
    #
    # Defines your resolution processing. Your block will receive the name to resolve, the
@@ -75,21 +90,29 @@ class Node
    # Renders the node content to the State. If the request includes a "view" parameter that
    # matches one of ours (as a String) it will be used. If not and you have provided
    # an on_render handler, it will be used next. If not, and you have defined any views
-   # at all, the first will be used (not: only Ruby 1.9+ tracks Hash order). If you 
+   # at all, the first will be used (note: only Ruby 1.9+ tracks Hash order). If you 
    # haven't supplied any of these options, the routine will fail().
    
    def render( state, route = nil )
-      if state.properties.member?("view") && @views.member?(state.properties["view"]) then
-         @views[state.properties["view"]].render(state, route)
-      elsif defined?(@renderer) then
-         @renderer.call(state, route)
-      elsif !@views.empty? then
-         @views.first.render(state, route)
+      if view = @views.fetch(state.defined?("view") ? state["view"] : "default"){ @views.first } then
+         view.render(state, route)
       else
-         fail "you must provide a renderer (via on_render) or define at least one View"
+         fail "you must define at least one View on the Node in order to render it"
       end
    end
    
+   
+   #
+   # Skins the rendered content for output. Skinning provides the context to another 
+   # (down-route) Node's content. Only the Application has to provide skins, and the best
+   # choice is often to leave it up to someone else to do.
+   
+   def skin( state, route = nil )
+      if skin = @skins.fetch(state.defined?("skin") ? state["skin"] : "default"){ @skins.first } then
+         skin.render(state, route)
+      end
+   end
+
    
    #
    # Routes the specified URL from this node to the node that is being addressed.

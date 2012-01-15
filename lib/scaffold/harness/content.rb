@@ -30,7 +30,7 @@ class Content
 
    #
    # A convenience method that directly accepts Builder code and uses it on_write. The
-   # resulting MIME type is inferred from the Builder class.
+   # resulting MIME type is retrieved from the Builder class.
    #
    # Example:
    #    state.set_response do

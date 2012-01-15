@@ -55,6 +55,7 @@ class State
       self["scaffold.application", SOURCE_INTERNAL] = application
       self["scaffold.route"      , SOURCE_INTERNAL] = nil;
       self["request.url"         , SOURCE_INTERNAL] = url
+      self["request.get"         , SOURCE_INTERNAL] = url.parameters
       self["request.secure"      , SOURCE_INTERNAL] = !!properties.fetch("request.secure", url.scheme == "https")
       self["response.status"     , SOURCE_INTERNAL] = 0;
       self["response.content"    , SOURCE_INTERNAL] = nil;
@@ -67,7 +68,7 @@ class State
       load(properties["request.cookies"], SOURCE_COOKIE     )
       load(@application.defaults        , SOURCE_DEFAULTS   )
 
-      self["request.language"] = fetch("request.language") do 
+      self["request.language", SOURCE_INTERNAL] = fetch("request.language") do 
          if @properties.member?("request.language_preference") then
             @properties["request.language_preference"].best_of(@application.supported_languages)
          else
@@ -89,13 +90,23 @@ class State
 
 
    #
-   # Returns a list of response headers.
+   # Returns true if the name is defined in the State.
    
-   def response_headers()
-      fail_todo "merge cookie sets with stated headers"
+   def member?( name )
+      @properties.member?(name.to_s)
    end
+   
+   alias :defined? :member?
+   
 
-
+   #
+   # Gets a property from the state, returning nil if not present.
+   
+   def []( name )
+      @properties.fetch(name.to_s, default)
+   end
+   
+   
    #
    # Sets a property into the state. Ensures source weights are respected.
    
@@ -111,14 +122,6 @@ class State
    end
 
          
-   #
-   # Gets a property from the state, returning nil if not present.
-   
-   def []( name )
-      @properties.fetch(name.to_s, default)
-   end
-   
-   
    #
    # Gets a property from the state, returning your default if not present. You can
    # supply a block to generate the default.
@@ -178,6 +181,14 @@ class State
       end
    end
    
+   
+   #
+   # Returns a list of response headers.
+   
+   def response_headers()
+      fail_todo "merge cookie sets with stated headers"
+   end
+
    
    #
    # Adds a header to the response.
