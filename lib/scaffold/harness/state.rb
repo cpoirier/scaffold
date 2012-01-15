@@ -31,94 +31,102 @@ module Scaffold
 module Harness
 class State
    
-
-   attr_reader :application, :url, :get_parameters, :post_parameters, :cookies, :status, :language, :user_agent, :environment
-   attr_accessor :content_type, :status, :headers, :response, :route
-   
-   def secure?   ; return !!@secure   ; end
-   def complete? ; return !!@response ; end
+   SOURCE_INTERNAL    = 6
+   SOURCE_DIRECT      = 5
+   SOURCE_APPLICATION = 4
+   SOURCE_POST        = 3
+   SOURCE_GET         = 2
+   SOURCE_COOKIE      = 1
+   SOURCE_DEFAULTS    = 0
    
    def self.build( application, rack_request )
-      new(application, URL.build(rack_request), :post => rack_request.POST, :cookies => rack_request.cookies, :language_preference => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), :user_agent => rack_request.env["HTTP_USER_AGENT"], :environment => rack_request.env)
+      new(application, URL.build(rack_request), "request.post" => rack_request.POST, "request.cookies" => rack_request.cookies, "request.language_preference" => LanguagePreference.build(rack_request.env["HTTP_ACCEPT_LANGUAGE"]), "request.user_agent" => rack_request.env["HTTP_USER_AGENT"], "rack.environment" => rack_request.env)
    end
-   
-   #
-   # A (read-only, please) set of request parameters, chosen with the following priority:
-   #   POST, GET, COOKIES.
-   #
-   # Any cookies you set using set_cookie() will also appear here, if appropriate.
-   
-   def parameters()
-      @parameters
-   end
-   
    
    def initialize( application, url, properties = {} )
-      properties[:application] = application
-      properties[:url        ] = url
-      properties[:get        ] = url.parameters
-      properties[:parameters ] = url.parameters.dup
+      @application = application
+      @properties  = {}
+      @weights     = {}
+      @cookie_sets = {}
       
-      @properties         = application.properties.update(properties)
-      @application        = application
-      @url                = url
-      @get_parameters     = url.parameters
-      @post_parameters    = @properties.fetch(:post       , {}                   )
-      @cookies            = @properties.fetch(:cookies    , {}                   )
-      @environment        = @properties.fetch(:environment, {}                   )
-      @secure             = @properties.fetch(:secure     , url.scheme == "https")
-      @user_agent         = @properties.fetch(:user_agent , nil                  )
+      #
+      # Load in the data.
+      
+      self["scaffold.application", SOURCE_INTERNAL] = application
+      self["scaffold.route"      , SOURCE_INTERNAL] = nil;
+      self["request.url"         , SOURCE_INTERNAL] = url
+      self["request.secure"      , SOURCE_INTERNAL] = !!properties.fetch("request.secure", url.scheme == "https")
+      self["response.status"     , SOURCE_INTERNAL] = 0;
+      self["response.content"    , SOURCE_INTERNAL] = nil;
+      self["response.headers"    , SOURCE_INTERNAL] = [];
 
-      @language = @properties.fetch(:language) do
-         if @properties.member?(:language_preference) then
-            @properties.fetch(:language_preference).best_of(@application.supported_languages)
+      load(properties                   , SOURCE_DIRECT     )
+      load(@application.properties      , SOURCE_APPLICATION)
+      load(properties["request.post"]   , SOURCE_POST       )
+      load(url.parameters               , SOURCE_GET        )
+      load(properties["request.cookies"], SOURCE_COOKIE     )
+      load(@application.defaults        , SOURCE_DEFAULTS   )
+
+      self["request.language"] = fetch("request.language") do 
+         if @properties.member?("request.language_preference") then
+            @properties["request.language_preference"].best_of(@application.supported_languages)
          else
             @application.supported_languages.first
-         end
-      end
-
-      @status      = 200;
-      @response    = nil
-      @cookie_sets = {}
-      @headers     = []
-      @route       = nil
-      
-      load_parameters()
-   end
-   
-      
-   #
-   # Gets a property from the state. State properties are picked up in the following priority: 
-   # direct sets on the state; application properties; post parameters; get parameters; 
-   # cookies; application defaults; your passed default. 
-   
-   def []( name, default = nil )
-      @properties.fetch(name) do |key|
-         @cookies.fetch(name) do
-            @application.defaults.fetch(key, default)
-         end
+         end      
       end
    end
    
+   def application; @application               ; end
+   def url        ; self["request.url"       ] ; end
+   def language   ; self["request.language"  ] ; end
+   def user_agent ; self["request.user_agent"] ; end 
+   def route      ; self["scaffold.route"    ] ; end
+   def status     ; self["response.status"   ] ; end
+   def response   ; self["response.content"  ] ; end
+   
+   def secure?    ; return !!self["request.secure"]    ; end
+   def complete?  ; return self["response.status"] > 0 ; end
+
 
    #
-   # Sets a property in the state.
+   # Returns a list of response headers.
    
-   def []=( name, value )
-      @properties[name] = value
+   def response_headers()
+      fail_todo "merge cookie sets with stated headers"
    end
 
+
+   #
+   # Sets a property into the state. Ensures source weights are respected.
+   
+   def []=( *args )
+      name   = name.shift.to_s
+      value  = rest.pop
+      source = rest.empty? ? SOURCE_DIRECT : (0 + rest.shift)
+            
+      if !@properties.member?(name) || @weights[name] <= source then
+         @properties[name] = value
+         @weights   [name] = source
+      end
+   end
+
+         
+   #
+   # Gets a property from the state, returning nil if not present.
+   
+   def []( name )
+      @properties.fetch(name.to_s, default)
+   end
+   
    
    #
-   # Deletes a property from the state. Note, a subsequent retrieval will return an application 
-   # default at best. Deleting a property that was passed in the get parameters, for instance, 
-   # means you will no longer be able to get that property using the [] routine. You can still 
-   # retrieve it directly from get_parameters(), however.
+   # Gets a property from the state, returning your default if not present. You can
+   # supply a block to generate the default.
    
-   def delete_property( name )
-      @properties.delete(name)
+   def fetch( name, default = nil, &block )
+      @properties.fetch(name.to_s, default, &block)
    end
-
+   
 
    #
    # Sets a Content object as the response for this request. If you pass a block, it will be 
@@ -135,12 +143,12 @@ class State
    def set_response( content = nil, parameters = {}, &block )
       if block then
          if content.is_a?(Class) then
-            @response = Content.build(content, parameters, &block)
+            self["response.content"] = Content.build(content, parameters, &block)
          else
-            @response = yield
+            self["response.content"] = yield
          end
       else
-         @response = content
+         self["response.content"] = content
       end
    end
 
@@ -149,12 +157,8 @@ class State
    # Sets a cookie into the state and client.
 
    def set_cookie( name, value, expires_in = 0 )
-      @cookies[name] = value
+      self[name, SOURCE_COOKIE] = value
       @cookie_sets[name] = CookieSet.new(name, value, expires_in)
-      
-      unless @get_parameters.member?(name) or @post_parameters.member?(name)
-         @parameters[name] = value
-      end
    end
    
 
@@ -162,8 +166,16 @@ class State
    # Unsets a cookie from the state and client.
    
    def unset_cookie( name )
-      @cookies.delete(name)
       @cookie_sets[name] = CookieSet.new(name, "", -1)
+      
+      if @properties.member?(name) && @weights[name] == SOURCE_COOKIE then
+         if @application.defaults.member?(name) then
+            self[name] = @application.defaults[name]
+         else
+            @properties.delete(name)
+            @weights.delete(name)
+         end
+      end
    end
    
    
@@ -176,13 +188,10 @@ class State
 
 
    #
-   # Discards all headers already set. Does not affect cookie sets unless you say it should.
-   # Note: even if you discard cookies, their values will not be removed from the state 
-   # properties.
+   # Discards all headers already set. Does not affect cookie sets.
    
-   def reset_headers( and_cookies = false )
+   def reset_headers()
       @headers.clear
-      @cookie_sets.clear if and_cookies
    end
    
    
@@ -194,25 +203,25 @@ class State
    # Forked requests do not inherit either get or post parameters, so pass those accordingly.
    
    def fork( path, get_parameters = {}, cookies = nil, secure = nil, post_parameters = {} )
-      cookies ||= @cookies
-      secure = @secure if secure.nil?
-      url    = @url.offset(path, get_parameters, false)
+      cookies ||= self["request.cookies"].dup
+      secure = secure? if secure.nil?
+      url    = self["request.url"].offset(path, get_parameters, false)
       
-      new(application, url, :post => post_parameters, :cookies => rack_request.cookies, :secure => secure, :language_preference => @language_preference, :user_agent => @user_agent)
+      new(application, url, "request.post" => post_parameters, "request.cookies" => cookies, "request.secure" => secure, "request.language" => self["request.language"], "request.user_agent" => self["request.user_agent"])
    end
       
 
 private
 
-   def load_parameters()
-      [@post_parameters, @get_parameters, @cookies].each do |set|
-         set.each do |key, value|
-            @parameters[key] = value unless @parameters.member?(key)
-         end
+   def load( hash, source )
+      return if hash.nil?
+      return if hash.empty?
+      
+      hash.each do |name, value|
+         self[name, source] = value
       end
    end
-
-
+   
    CookieSet = Struct.new(:name, :value, :expires_in)
 
 end # State
