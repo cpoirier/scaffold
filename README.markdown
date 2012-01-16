@@ -28,9 +28,10 @@ Scaffold's design is based on a whole bunch of experience doing small, hand-code
 systems, and a few basic principles:
 
 * Site organization is a business decision, not simply an application one. Your framework 
-  should support you, not dictate to you, in this respect. The organization of code within 
-  a software system is the business of an intelligent programmer. There is no (appropriate) 
-  one-size-fits-all solution.
+  should support you, not dictate to you, in this respect. 
+  
+* The organization of code within a software system is the business of an intelligent programmer. 
+  There is no (appropriate) one-size-fits-all solution.
 
 * Your website's URLs are part of your user interface; they provide context to your 
   software and help define your conceptual model for your users. To the greatest extent
