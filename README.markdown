@@ -57,7 +57,8 @@ What follows is the simplest possible Scaffold application. It doesn't use any N
 do any routing, has no Views or Skins. By defining on_process and returning a completed State, 
 Scaffold considers the matter closed and sends off the response to the client. If you install
 Scaffold, Baseline, and Rack, put this in a file, and run it, you can hit the application on
-localhost:8989.
+localhost:8989. (In fact, you can find this example in the 
+[main scaffold.rb file](https://github.com/cpoirier/scaffold/blob/master/lib/scaffold.rb)).
 
       require "scaffold"
       
