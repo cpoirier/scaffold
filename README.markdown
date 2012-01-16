@@ -22,6 +22,14 @@ Application getting the final word (generally by wrapping the finished content u
 navigation and branding).
 
 
+# Status
+
+Scaffold is pretty rudimentary, at present. In fact, I rewrote most of it in the last week (Jan 15). 
+;-) I expect a lot more changes in the first quarter of 2012, but I think the broad strokes are now
+correct. I'm building Scaffold for use in some personal projects, and to help flesh out some of
+[Schemaform](https://github.com/cpoirier/schemaform).
+
+
 # Philosophy
 
 Scaffold's design is based on a whole bunch of experience doing small, hand-coded, web-based 
@@ -89,7 +97,7 @@ case of Application, we define the on_process handler, which is used to process 
 to the system.
 
 The State object passed to the on_process handler contains everything known about the request, 
-and receives the response that we generate. In fact, as a convenience, State.set_response allows
+and receives the response that we generate. As a convenience, State.set_response allows
 you to directly instantiate a Builder and use it as a DSL in the block you pass. In this case,
 we choose the HTML5 builder, and build HTML for the response directly in Ruby. Inside the block,
 the State object is still accessible, and we use it to check for form data, and construct the
