@@ -53,7 +53,7 @@ if $0 == __FILE__ then
                   title "Example & Fun"
                end
                body do
-                  if state.member?("name") then
+                  if state.member?("name") && !state["name"].empty? then
                      p "Welcome to Scaffold, #{state["name"]}!"
                   else
                      form do

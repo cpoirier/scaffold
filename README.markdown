@@ -43,41 +43,60 @@ systems, boiled down to a few basic principles:
   a window on the screen should not require you to become one.
 
 
-# Simple Example
+# Hello, world.
 
 What follows is the simplest possible Scaffold application. It doesn't use any Nodes, doesn't
 do any routing, has no Views or Skins. By defining on_process and returning a completed State, 
 Scaffold considers the matter closed and sends off the response to the client. If you install
-Scaffold, Baseline, and Rack, put this in a file, and run it, you'll can hit the application
-on localhost:8989. In fact, this example is taken from scaffold.rb, the library master script.
-You can run it directly and the application will run.
+Scaffold, Baseline, and Rack, put this in a file, and run it, you can hit the application on
+localhost:8989.
 
-    require "scaffold"
-    
-    Scaffold::Application.new("Example") do
-       on_process do |state|
-          state.set_response(Scaffold::Generation::HTML5) do
-             html do
-                head do
-                   title "Example & Fun"
-                end
-                body do
-                   if state.member?("name") then
-                      p "Welcome to Scaffold, #{state["name"]}!"
-                   else
-                      form do
-                         p do
-                            label "What is your name?", :for => "name"
-                            br
-                            input :type => "text", :name => "name"
-                            input :type => "submit"
-                         end
-                      end
-                   end
-                end
-             end
-          end
-       end
-    end.start()
-    
+      require "scaffold"
+      
+      Scaffold::Application.new("Example") do
+         on_process do |state|
+            state.set_response(Scaffold::Generation::HTML5) do
+               html do
+                  head do
+                     title "Example & Fun"
+                  end
+                  body do
+                     if state.member?("name") && !state["name"].empty? then
+                        p "Welcome to Scaffold, #{state["name"]}!"
+                     else
+                        form do
+                           p do
+                              label "What is your name?", :for => "name"
+                              br
+                              input :type => "text", :name => "name"
+                              input :type => "submit"
+                           end
+                        end
+                     end
+                  end
+               end
+            end
+         end
+      end.start()
+      
+This really is a simple example. On first request, we display a form asking for the user's
+name. When submitted, we output a customized welcome message. Nothing earth-shattering. But it
+does show some basic patterns you'll use a lot in Scaffold coding.
+
+In Scaffold, most major classes accept a block on the constructor that will be instance_eval'd on 
+the new object, allowing you to treat the class's API as a domain specific language (DSL). In the 
+case of Application, we define the on_process handler, which is used to process every request made
+to the system.
+
+The State object passed to the on_process handler contains everything known about the request, 
+and receives the response that we generate. In fact, as a convenience, State.set_response allows
+you to directly instantiate a Builder and use it as a DSL in the block you pass. In this case,
+we choose the HTML5 builder, and build HTML for the response directly in Ruby. Inside the block,
+the State object is still accessible, and we use it to check for form data, and construct the
+display appropriately.
+
+Scaffold aims to make everything clean and simple. Wherever possible, Scaffold avoids having
+you define singleton classes just to make something work. DSLs abound, and you should use them
+wherever their meaning is clear. 
+
 
