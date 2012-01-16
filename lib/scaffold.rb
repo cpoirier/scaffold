@@ -53,7 +53,18 @@ if $0 == __FILE__ then
                   title "Example & Fun"
                end
                body do
-                  p "Welcome"
+                  if state.member?("name") then
+                     p "Welcome to Scaffold, #{state["name"]}!"
+                  else
+                     form do
+                        p do
+                           label "What is your name?", :for => "name"
+                           br
+                           input :type => "text", :name => "name"
+                           input :type => "submit"
+                        end
+                     end
+                  end
                end
             end
          end

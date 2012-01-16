@@ -84,7 +84,8 @@ class Route
       rest = @unresolved.rest
    
       if @node.container? then
-         if node, data = @node.resolve(name, self, state) then
+         node, data = @node.resolve(name, self, state)
+         if node then
             return self.new(self, name, node, data, rest)
          end
       end

@@ -24,8 +24,8 @@ navigation and branding).
 
 # Philosophy
 
-Scaffold's design is based on a whole bunch of experience doing small, hand-coded web-based 
-systems, and a few basic principles:
+Scaffold's design is based on a whole bunch of experience doing small, hand-coded, web-based 
+systems, boiled down to a few basic principles:
 
 * Site organization is a business decision, not simply an application one. Your framework 
   should support you, not dictate to you, in this respect. 
@@ -41,4 +41,43 @@ systems, and a few basic principles:
 * You should never be required to create a subclass when passing a Proc will suffice. We have 
   a good language: we should use it. To use a desktop programming metaphor, wanting to open 
   a window on the screen should not require you to become one.
+
+
+# Simple Example
+
+What follows is the simplest possible Scaffold application. It doesn't use any Nodes, doesn't
+do any routing, has no Views or Skins. By defining on_process and returning a completed State, 
+Scaffold considers the matter closed and sends off the response to the client. If you install
+Scaffold, Baseline, and Rack, put this in a file, and run it, you'll can hit the application
+on localhost:8989. In fact, this example is taken from scaffold.rb, the library master script.
+You can run it directly and the application will run.
+
+    require "scaffold"
+    
+    Scaffold::Application.new("Example") do
+       on_process do |state|
+          state.set_response(Scaffold::Generation::HTML5) do
+             html do
+                head do
+                   title "Example & Fun"
+                end
+                body do
+                   if state.member?("name") then
+                      p "Welcome to Scaffold, #{state["name"]}!"
+                   else
+                      form do
+                         p do
+                            label "What is your name?", :for => "name"
+                            br
+                            input :type => "text", :name => "name"
+                            input :type => "submit"
+                         end
+                      end
+                   end
+                end
+             end
+          end
+       end
+    end.start()
+    
 

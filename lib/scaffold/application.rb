@@ -80,7 +80,7 @@ class Application < Node
    # created, and before before it is processed. This is useful if you want to set some
    # additional properties on the State before processing begins.
    
-   def before_process( &block )
+   def on_request( &block )
       @preprocessor = block
    end
 
@@ -103,7 +103,7 @@ class Application < Node
    # is returned to the client. This is useful if you want to do some caching or other similar
    # work after processing is complete.
    
-   def after_process( &block )
+   def on_response( &block )
       @postprocessor = block
    end
 
