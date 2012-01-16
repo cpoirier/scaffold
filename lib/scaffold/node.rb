@@ -79,7 +79,8 @@ class Node
    
    #
    # Defines your resolution processing. Your block will receive the name to resolve, the
-   # context Route (if applicable), and the container URL.
+   # context Route (if applicable), and the container URL. You should return a node and a
+   # hash of data if found, or nil otherwise.
    
    def on_resolve(&block)
       @resolver = block
@@ -122,14 +123,14 @@ class Node
    
    def route( state, url = nil )
       url = state.url if url.nil?
-      Route.new(nil, nil, self, url.requested_path).complete(state)
+      Route.new(nil, nil, self, {}, url.requested_path).complete(state)
    end
    
       
    #
-   # Returns a node for the given name, or nil, if this node doesn't recognize the name. 
-   # Name resolution should depend only on the visible URL. Considerations of session, post 
-   # parameters, cookies, etc., should be kept for processing.
+   # Returns a node and hash of data for the given name, or nil, if this node doesn't recognize 
+   # the name. Name resolution should depend only on the visible URL. Considerations of session, 
+   # post parameters, cookies, etc., should be kept for processing.
    
    def resolve( name, context_route, state )
       return nil unless defined?(@resolver)
@@ -137,8 +138,8 @@ class Node
       container_url = context_route.url(state.url)
       if @application.name_cache then
          @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
-            if node = @resolver.call(name, context_route, container_url) then
-               [node, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
+            if data = @resolver.call(name, context_route, container_url) then
+               [data, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
             else
                [nil, 0]
             end

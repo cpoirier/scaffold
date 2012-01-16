@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby -KU
 # =============================================================================================
 # Scaffold
-# A simplified, CMS-like website development environment, built on Schemaform.
+# A simple, lightweight development framework for hand-coded web sites.
 #
 # [Website]   http://schemaform.org/scaffold
 # [Copyright] Copyright 2011 Chris Poirier

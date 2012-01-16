@@ -26,13 +26,14 @@ module Scaffold
 module Harness
 class Route
       
-   attr_reader :parent, :name, :node, :path, :unresolved, :status, :redirect
+   attr_reader :parent, :name, :data, :path, :unresolved, :status, :redirect
 
-   def initialize( parent, name, node, unresolved, terminal = false )
+   def initialize( parent, name, node, data, unresolved, terminal = false )
       @parent     = parent
       @name       = name
       @path       = @parent ? @parent.path + name : Path.new(name)
       @node       = node
+      @data       = data
       @unresolved = Path.build(unresolved)
       
       @complete   = false
@@ -72,6 +73,7 @@ class Route
    end
    
    
+   
    #
    # Determines the next step in the routing. Returns a Route or nil.
    
@@ -82,13 +84,13 @@ class Route
       rest = @unresolved.rest
    
       if @node.container? then
-         if node = @node.resolve(name, self, state) then
-            return self.new(self, name, node, rest)
+         if node, data = @node.resolve(name, self, state) then
+            return self.new(self, name, node, data, rest)
          end
       end
       
       if node = node(:not_found) then
-         return self.new(self, name, node, rest, true)
+         return self.new(self, name, node, {}, rest, true)
       else
          fail "something in your application must define a node for paths not found"
       end
