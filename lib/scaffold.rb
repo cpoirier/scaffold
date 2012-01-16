@@ -47,6 +47,7 @@ end
 if $0 == __FILE__ then
    Scaffold::Application.new("Example") do
       on_process do |state|
+         start = Time.now()
          state.set_response(Scaffold::Generation::HTML5) do
             html do
                head do
@@ -67,6 +68,7 @@ if $0 == __FILE__ then
                   end
                end
             end
+            comment "Generation took #{Time.now() - start} seconds"
          end
       end
    end.start()

@@ -64,6 +64,7 @@ localhost:8989. (In fact, you can find this example in the
       
       Scaffold::Application.new("Example") do
          on_process do |state|
+            start = Time.now()
             state.set_response(Scaffold::Generation::HTML5) do
                html do
                   head do
@@ -84,6 +85,7 @@ localhost:8989. (In fact, you can find this example in the
                      end
                   end
                end
+               comment "Generation took #{Time.now() - start} seconds"
             end
          end
       end.start()
