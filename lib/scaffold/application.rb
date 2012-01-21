@@ -113,9 +113,14 @@ class Application < Node
    # the response (all from/to the State). Standard processing is to route the request 
    # and render the result. Calls your on_process() proc instead, if applicable.
    
-   def process( state )
+   def process( state, &processor )
       @preprocessor.call(state) if @preprocessor
-      result = @processor ? @processor.call(state) : route(state)
+      
+      result = if (processor ||= @processor) then
+         processor.call(state)
+      else
+         route(Route.new(nil, nil, self, state.url.requested_path), state)
+      end
 
       if result.is_a?(Harness::Route) then
          route = result.complete(state)

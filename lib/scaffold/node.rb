@@ -82,8 +82,20 @@ class Node
    # context Route (if applicable), and the container URL. You should return a node and a
    # hash of data if found, or nil otherwise.
    
-   def on_resolve(&block)
+   def on_resolve( &block )
       @resolver = block
+   end
+   
+   
+   #
+   # Defines your authorize processing. This is called after resolution has mapped a 
+   # name to your Node, and before it moves on to the next unresolved names. You can
+   # use this to check user permissions and such. You will be passed the state and 
+   # the route here, and you can pass back a Node or a handler name to use. If you
+   # return anything else, no changes will be made.
+   
+   def on_authorize(&block)
+      @authorizer = block
    end
 
 
@@ -116,36 +128,67 @@ class Node
 
    
    #
-   # Routes the specified URL from this node to the node that is being addressed.
-   # Note that passing a state is optional. The URL contains the GET parameters already,
-   # so if you can route based solely on that, the completed route will be easily
-   # cacheable. If you use the state, things get more sticky.
+   # Returns a completed route to the target. This version uses resolve() and authorize() 
+   # to do the work. 
    
-   def route( state, url = nil )
-      url = state.url if url.nil?
-      Route.new(nil, nil, self, {}, url.requested_path).complete(state)
+   def route( context_route, state )
+      return context_route if context_route.complete?
+      
+      name = context_route.unresolved.first
+      rest = context_route.unresolved.rest
+      
+      if container? then
+         if node = resolve(name, context_route, state) then
+            route = Route.new(context_route, name, node, rest)            
+            case alt = authorize(state, route)
+            when Symbol
+               node = route.handler_for(alt, true)
+            when Node
+               node = alt
+            end
+         end
+      end
+
+      node ||= route.handler_for(:not_found, "something in your application must define a node for paths not found")
+      node.route(Route.new(context_route, name, node, rest), state)
+   end
+   
+   
+   #
+   # Post-processes a name resolution during routing, to allow for substitutions and
+   # such based on state information. The most obvious thing to do here is to enforce
+   # access control, with a redirect to an :access_denied handler on fail. Return 
+   # a Node or a handler name (Symbol) to be looked up using handler_for() (on this
+   # Node and then back along the Route).
+   
+   def authorize( state, route, &block )
+      return block.call(state, route) if block
+      return @authorizer.call(state, route) if @authorizer
+      return self
    end
    
       
    #
-   # Returns a node and hash of data for the given name, or nil, if this node doesn't recognize 
-   # the name. Name resolution should depend only on the visible URL. Considerations of session, 
-   # post parameters, cookies, etc., should be kept for processing.
+   # Returns a node for the given name, or nil, if this node doesn't recognize the name. Name 
+   # resolution should depend only on the visible URL. Considerations of session, post 
+   # parameters, cookies, etc., should be kept for authorize().
    
-   def resolve( name, context_route, state )
-      return nil unless defined?(@resolver)
-      
-      container_url = context_route.url(state.url)
-      if @application.name_cache then
-         @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
-            if data = @resolver.call(name, context_route, container_url) then
-               [data, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
-            else
-               [nil, 0]
+   def resolve( name, context_route, state, &block )
+      if block ||= @resolver then
+         container_url = context_route.url(state.url)
+         if @application.name_cache then
+            @application.name_cache.namespaces[container_url.to_s].retrieve(name) do
+               if node = block.call(name, context_route, container_url) then
+                  [node, (@application.user_agent_database.browser?(state.user_agent) ? 1 : 2)]
+               else
+                  [nil, 0]
+               end
             end
+         else
+            block.call(name, context_route, container_url)
          end
       else
-         @resolver.call(name, context_route, container_url)
+         nil
       end
    end
 

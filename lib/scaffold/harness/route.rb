@@ -26,20 +26,19 @@ module Scaffold
 module Harness
 class Route
       
-   attr_reader :parent, :name, :data, :path, :unresolved, :status, :redirect
+   attr_reader :parent, :name, :path, :node, :unresolved, :status, :redirect
 
-   def initialize( parent, name, node, data, unresolved, terminal = false )
+   def initialize( parent, name, node, unresolved )
       @parent     = parent
       @name       = name
       @path       = @parent ? @parent.path + name : Path.new(name)
       @node       = node
-      @data       = data
       @unresolved = Path.build(unresolved)
       
       @complete   = false
       @redirect   = nil
    
-      if terminal || @node.routing_sink? then
+      if @node.routing_sink? then
          @complete = true
       elsif @unresolved.empty? then
          @complete = true
@@ -47,6 +46,10 @@ class Route
             @location = @node.container? ? @path.to_directory() : @path.to_file()
          end
       end
+   end
+   
+   def to_s
+      @path.to_s
    end
    
    def complete?()
@@ -62,51 +65,24 @@ class Route
    end
 
    #
-   # Retrieves the primary or an handler node for this route.
-   
-   def node( purpose = nil )
-      if purpose.nil? then
-         @node
-      else
-         @node.handler_for(purpose) || (@parent ? @parent.node(purpose) : @node.application.handler_for(purpose))
+   # Retrieves a secondary handler for this route. If you pass a block, it will be passed
+   # this route if the normal processing fails, and can produce a Node, nil, or raise an
+   # exception.
+ 
+   def handler_for( purpose, insist = nil, &block )
+      handler = @node.handler_for(purpose) || (@parent ? @parent.node(purpose) : @node.application.handler_for(purpose)))
+
+      if handler.nil? && block then
+         handler = block.call(self)
       end
-   end
-   
-   
-   
-   #
-   # Determines the next step in the routing. Returns a Route or nil.
-   
-   def next( state )
-      return nil if complete?
       
-      name = @unresolved.first
-      rest = @unresolved.rest
-   
-      if @node.container? then
-         node, data = @node.resolve(name, self, state)
-         if node then
-            return self.new(self, name, node, data, rest)
+      if handler.nil? && insist then
+         if insist.is_a?(String) then
+            fail insist
+         else
+            fail "could not find an required handler for [#{purpose}] on Route #{self.to_s}"
          end
       end
-      
-      if node = node(:not_found) then
-         return self.new(self, name, node, {}, rest, true)
-      else
-         fail "something in your application must define a node for paths not found"
-      end
-   end
-
-   
-   #
-   # Follows the next() chain until it finds a complete?() route to return.
-   
-   def complete( state )
-      route = self
-      until route.complete?
-         route = route.next(state) 
-      end
-      route
    end
    
    #
@@ -119,6 +95,7 @@ class Route
          current = current.parent
       end
    end
+   
    
 end # Route
 end # Harness
