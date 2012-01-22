@@ -78,15 +78,50 @@ class HTML5 < Builder
       super(stream, parameters, &block)
       flush
    end
+   
+   
+   #
+   # Starts an HTML stream with a standard header and footer, drawn from the State.
+   # You just fill in everything inside the body tag.
+   #
+   # State properties of note:
+   # =========================
+   # request.language -- the language name, used on the html tag
+   # html.direction   -- defaults to "ltr"
+   # html.title       -- the page title
+   # html.headscripts -- a list of Javascript URLs and code to include in the header
+   # html.css         -- a list of CSS URLs and strings to include
+   # html.tailscripts -- a list of JavaScript code to include at the bottom of the page
+   
+   def standard_html( state, encoding = nil, &body_filller )
+      html(:language => state.fetch("request.language"), :direction => state.fetch("html.direction", "ltr") do
+         head do
+            meta :charset => @parameters.fetch(:encoding, Encoding.default_internal)
+            state.fetch("html.headscripts").each do |script|
+               fail_todo "what now?"
+            end
+            state.fetch("html.css").each do |css|
+               fail_todo "what now?"
+            end
+         end
+         body do
+            capture(&body_filler)
+            
+            state.fetch("html.tailscripts").each do |script|
+               fail_todo "what now?"
+            end
+         end
+      end
+   end
 
 
    #
    # Starts an HTML stream.
    
-   def html( language = "en", attrs = {}, &block )
+   def html( attrs = {}, &block )
       @buffer << "<!DOCTYPE html>"
       @buffer << "\n" if @pretty_print
-      make( :html, {:lang => language}.update(attrs), &block )
+      make( :html, attrs, &block )
       flush
    end
 
@@ -186,6 +221,18 @@ class HTML5 < Builder
             result
          end
       CODE
+   end
+   
+   def javascript( *args, &block )
+      if block then 
+         make("script", *args) do
+            raw("//<![CDATA[\n")
+            capture(&block)
+            raw("\n//]]>")
+         end
+      else
+         make("script", *args)
+      end
    end
    
 

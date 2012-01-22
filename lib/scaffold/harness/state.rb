@@ -60,6 +60,7 @@ class State
    #    response.status      => the HTTP response code
    #    response.content     => the Content object to return
    #    response.headers     => the raw headers you've set (not including cookies and other special stuff)
+   #    response.charset     => the charset to include with the Content-Type header
    #    cookie.domain        => the default cookie domain
    #    cookie.path          => the default cookie path
    #    cookie.secure        => the default cookie secure status
@@ -85,6 +86,7 @@ class State
       self["request.get"         , SOURCE_DIRECT  ] = url.parameters
       self["request.secure"      , SOURCE_DIRECT  ] = !!properties.fetch("request.secure", url.scheme == "https")
       self["scaffold.route"      , SOURCE_DIRECT  ] = nil
+      self["response.charset"    , SOURCE_DIRECT  ] = "UTF-8"
       self["response.status"     , SOURCE_DIRECT  ] = HTTP_OKAY
       self["response.content"    , SOURCE_DIRECT  ] = nil
       self["response.headers"    , SOURCE_DIRECT  ] = {}
@@ -256,8 +258,8 @@ class State
    
    def headers()
       headers = self["response.headers"]
-      if self["response.content"] then
-         headers["Content-Type"] = self["response.content"].mime_type
+      if content = self["response.content"] then
+         headers["Content-Type"] = content.mime_type + "; charset=" + content.encoding
       else
          headers.delete("Content-Type")
       end

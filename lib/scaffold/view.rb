@@ -28,10 +28,9 @@ require "scaffold"
 module Scaffold
 class View
 
-   def initialize( node, &definer )
+   def initialize( node, &renderer )
       @node     = node
-      @renderer = nil
-      instance_eval(&definer) if definer
+      @renderer = renderer
    end
 
    

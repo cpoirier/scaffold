@@ -56,8 +56,8 @@ class Node
    # Note, if you use a Symbol name, a String version will automatically be registered for
    # you.
    
-   def on_view( name = "default", &definer )
-      @views[name] = View.new(&definer)
+   def on_view( name = "default", &renderer )
+      @views[name] = View.new(self, &renderer)
       if name.is_a?(Symbol) then
          @views[name.to_s] = @views[name]
       end
@@ -69,8 +69,8 @@ class Node
    # Node's content. Your block will be passed to the View for DSL processing. Note, if 
    # you use a Symbol name, a String version will automatically be registered for you.
    
-   def on_skin( name = "default", &definer )
-      @skins[name] = View.new(&definer)
+   def on_skin( name = "default", &renderer )
+      @skins[name] = View.new(self, &renderer)
       if name.is_a?(Symbol) then
          @skins[name.to_s] = @skins[name]
       end

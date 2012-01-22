@@ -43,7 +43,6 @@ end # Scaffold
    end
 end
 
-
 if $0 == __FILE__ then
    Scaffold::Application.new("Example") do
       on_process do |state|

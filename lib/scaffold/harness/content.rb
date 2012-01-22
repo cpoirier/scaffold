@@ -48,7 +48,7 @@ class Content
    
    
    def self.build( builder_class, parameters = {}, &filler )
-      new(builder_class.mime_type) do
+      new(builder_class.mime_type, parameters.fetch(:encoding => Encoding.default_internal) do
          on_write do |stream, extra|
             builder_class.new(stream, parameters.update(extra), &filler)
          end
@@ -60,8 +60,9 @@ class Content
    # Creates a new chunk of typed content. If you want, you can defer the creation of the
    # content by setting an on_write handler. 
    
-   def initialize( mime_type, strings = [], &definer )
+   def initialize( mime_type, encoding, strings = [], &definer )
       @mime_type = mime_type
+      @encoding  = encoding
       @strings   = strings
       @writer    = nil
       

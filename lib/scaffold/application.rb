@@ -156,12 +156,12 @@ class Application < Node
          headers = result.headers
          content = result.response
          
-         body = []
-         content.write_to(body)
-         [status, headers, body]
-         # Rack::Response.new(nil, status, headers).finish do |stream|
-         #    content.write_to(stream)
-         # end
+         # body = []
+         # content.write_to(body)
+         # [status, headers, body]
+         Rack::Response.new(nil, status, headers).finish do |stream|
+            content.write_to(stream)
+         end
       else
          [500, {"Content-type" => "text/plain"}, ["Scaffold failed to produce a result. For obvious reasons, this should not happen."]]
       end
